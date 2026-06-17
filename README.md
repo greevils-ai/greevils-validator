@@ -7,22 +7,32 @@ sets weights on-chain. **The only thing left to implement is one function** —
 ## The mechanism
 
 A miner's job is tiny (done with `greevils commit`): register a neuron, then publish an
-on-chain commitment proving they own a Hyperliquid account — an `{hl_address, message,
-signature}` blob where `signature` is an EIP-191 `personal_sign` over `message` by that
-account's key.
+on-chain commitment proving they own a Hyperliquid account — a compact
+`base64(hl_address(20B) ‖ signature(65B))` blob (the Raw commitment field is capped at 128
+bytes). `signature` is an EIP-191 `personal_sign` over the canonical message; the message
+isn't stored, the validator rebuilds it from the committing hotkey + address.
 
 Every round (default **every 24h**) the validator:
 
 1. **Syncs** the metagraph.
 2. **Reads commitments** for all registered miners (`get_all_commitments`) and **verifies**
-   each one: the signature must recover the claimed `hl_address`, and the signed message must
-   reference the committing hotkey (so a commitment can't be stolen and replayed).
+   each one: it rebuilds the canonical message from the committing hotkey + the embedded
+   address and checks the signature recovers that address. Rebuilding from the *committing*
+   hotkey is what binds the claim — a copied blob fails recovery under another hotkey.
    → [commitments.py](greevils_validator/commitments.py)
-3. **Classifies** each claimed account. It queries greevils-api (`GET /submissions`) for the
-   live agent accounts; an address is a **valid agent** iff some submission has that
-   `agent_address` with `status=RUNNING`, `health=HEALTHY` and `attestation=PASS`. Every
-   other claimed address (including ones the API has never seen) is a **human** account.
-   → [api_client.py](greevils_validator/api_client.py)
+3. **Classifies** each claimed account into **agent** or **human**. An account is an **agent**
+   only if BOTH hold:
+   - greevils-api (`GET /submissions`) reports its `agent_address` as a **valid agent** —
+     `status=RUNNING`, `health=HEALTHY`, `attestation=PASS`
+     → [api_client.py](greevils_validator/api_client.py); and
+   - its image digest is **approved** — any hotkey publishes its approved-digest list to
+     greevils-api (`greevils approve`) and commits the list's hash on-chain
+     (`gva1:<base64(sha256(list))>`). The validator takes the **highest-staked
+     validator-permit holder**, fetches its list from greevils-api (`GET /approved/{hotkey}`),
+     and uses it only if the list's hash matches that hotkey's on-chain commitment. Any
+     mismatch/fetch failure ⇒ nothing approved. → [approvals.py](greevils_validator/approvals.py)
+
+   Everything else — unknown accounts, valid-but-**unapproved** agents — is a **human**.
 4. **Scores** each arena independently with the same logic — agents compete against agents,
    humans against humans — by calling `calculate_rewards(addresses)`.
    → [rewards.py](greevils_validator/rewards.py)
@@ -76,7 +86,8 @@ Wallet / network / netuid are CLI options (above). Policy is env-driven, see
 validator.py                       entrypoint: CLI, heartbeat, 24h loop, set_weights
 greevils_validator/config.py       emission split, cadence, API endpoint (env-driven)
 greevils_validator/commitments.py  read + verify on-chain ownership claims (eth_account)
-greevils_validator/api_client.py   query greevils-api for valid agent accounts
+greevils_validator/api_client.py   query greevils-api for valid agent accounts (+ digests)
+greevils_validator/approvals.py    top validator's approval hash -> fetch+verify list from api
 greevils_validator/rewards.py      calculate_rewards  <-- IMPLEMENT THIS
 greevils_validator/evaluation.py   classify into arenas, apply 90/10 split + burn, build weights
 ```
