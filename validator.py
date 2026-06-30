@@ -7,8 +7,8 @@ each other) with calculate_rewards, splits emissions into an agent pool and a hu
 that score (the human pool capped in dollar terms, agents absorbing the rest), burns whatever
 is unawarded to UID 0, and sets weights on-chain.
 
-The only thing to implement is the data layer behind calculate_rewards in
-greevils_validator/rewards.py.
+The one external dependency is greevils-api (valid-agent +
+approval lookups). Until it is reachable, every account is scored as a human (the agent lane burns).
 
   python validator.py --network finney --netuid 1 --coldkey my-wallet --hotkey my-hotkey
   python validator.py --once         # run a single round and exit (handy for testing)

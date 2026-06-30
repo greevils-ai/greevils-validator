@@ -49,8 +49,6 @@ BURN_UID = int(os.getenv("BURN_UID", "0"))
 # (a hard pre-gate, before any scoring). Checked REAL-TIME from each fill's `builderFee`: a fill
 # routed through us carries a builder fee at BUILDER_FEE_BPS; no fee (traded directly on HL) or a
 # different rate (another builder) is off-app. See builder.py.
-BUILDER_ADDRESS = os.getenv("GREEVILS_BUILDER",
-                            "0x607CC1ea4091F2642469DCC50Ed15B5eD2624379").lower()
 BUILDER_FEE_BPS = float(os.getenv("BUILDER_FEE_BPS", "5"))          # our builder's fee (basis points)
 BUILDER_FEE_TOL_BPS = float(os.getenv("BUILDER_FEE_TOL_BPS", "0.5"))  # match tolerance (fee rounding)
 BUILDER_MIN_NOTIONAL = float(os.getenv("BUILDER_MIN_NOTIONAL", "1"))  # $; skip dust (fee may round to 0)
