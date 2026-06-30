@@ -1,15 +1,19 @@
 """Greevils subnet validator.
 
-Runs an evaluation round every EVAL_INTERVAL seconds (default 24h). Each round verifies
+Runs an evaluation round daily at 00:00 UTC (the day boundary). Each round verifies
 miners' on-chain Hyperliquid ownership claims, classifies each account as a greevil agent or
-a human via greevils-api, scores agents-vs-agents and humans-vs-humans with calculate_rewards,
-splits emissions 90/10, burns any empty/loser arena to UID 0, and sets weights on-chain.
+a human via greevils-api, scores EVERYONE in one unified tournament (agents and humans play
+each other) with calculate_rewards, splits emissions into an agent pool and a human pool by
+that score (the human pool capped in dollar terms, agents absorbing the rest), burns whatever
+is unawarded to UID 0, and sets weights on-chain.
 
-The only thing to implement is calculate_rewards in greevils_validator/rewards.py.
+The only thing to implement is the data layer behind calculate_rewards in
+greevils_validator/rewards.py.
 
   python validator.py --network finney --netuid 1 --coldkey my-wallet --hotkey my-hotkey
   python validator.py --once         # run a single round and exit (handy for testing)
 """
+import datetime as dt
 import logging
 import os
 import sys
@@ -19,7 +23,15 @@ import time
 import bittensor as bt
 import click
 
-from greevils_validator.config import EVAL_INTERVAL, GREEVILS_API, HEARTBEAT_TIMEOUT
+from greevils_validator.config import GREEVILS_API, HEARTBEAT_TIMEOUT
+
+
+def _seconds_until_next_utc_midnight() -> float:
+    """Seconds from now until the next 00:00 UTC -- so the daily round (and its DB
+    snapshot) fires at the UTC day boundary, making each recorded day's equity exact."""
+    now = dt.datetime.now(dt.timezone.utc)
+    nxt = (now + dt.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(1.0, (nxt - now).total_seconds())
 from greevils_validator.evaluation import run_evaluation_round
 
 logging.basicConfig(
@@ -55,7 +67,7 @@ def _sleep_with_heartbeat(seconds, last_heartbeat, stop_event):
 def set_weights(subtensor, wallet, netuid, uids, weights):
     """Push the round's (uids, weights) on-chain. Floats are normalized by the SDK."""
     logger.info("Setting weights: %s", {u: round(w, 4) for u, w in zip(uids, weights)})
-    success = subtensor.set_weights(
+    resp = subtensor.set_weights(
         wallet=wallet,
         netuid=netuid,
         uids=uids,
@@ -63,10 +75,13 @@ def set_weights(subtensor, wallet, netuid, uids, weights):
         wait_for_inclusion=True,
         wait_for_finalization=False,
     )
+    # set_weights returns an ExtrinsicResponse (no __bool__, so `if resp` is always truthy);
+    # unpack it -- it yields (success, message), which also matches the older (bool, str) return.
+    success, message = resp
     if success:
         logger.info("Weights set for %d UIDs", len(uids))
     else:
-        logger.warning("Failed to set weights")
+        logger.warning("Failed to set weights: %s", message)
     return success
 
 
@@ -85,6 +100,13 @@ def main(network, netuid, coldkey, hotkey, api, once, log_level):
     """Run the Greevils subnet validator."""
     logging.getLogger().setLevel(getattr(logging, log_level.upper()))
     logger.info("Starting validator on network=%s, netuid=%s, api=%s", network, netuid, api)
+
+    # Warn if the builder-exclusivity start date is recent enough to exempt real history.
+    from greevils_validator.config import BUILDER_EXCLUSIVITY_START
+    if BUILDER_EXCLUSIVITY_START and (dt.datetime.now(dt.timezone.utc).date() - BUILDER_EXCLUSIVITY_START).days < 30:
+        logger.warning("BUILDER_EXCLUSIVITY_START=%s is recent -- fills before it are EXEMPT from the "
+                       "builder-exclusivity check; set it to the rule's real launch date.",
+                       BUILDER_EXCLUSIVITY_START)
 
     last_heartbeat = [time.time()]
     stop_event = threading.Event()
@@ -106,6 +128,25 @@ def main(network, netuid, coldkey, hotkey, api, once, log_level):
             return
         logger.info("Validator UID: %d", metagraph.hotkeys.index(my_hotkey))
 
+        # ALLOWED_PAIRS is the DEFINITIVE curated whitelist -- ONLY those pairs are tradable;
+        # we do NOT mirror all of HL (a miner can functionally trade any HL market through the
+        # builder app, but trading one outside this list eliminates them). Best-effort startup
+        # sanity check: warn about any curated symbol that matches no live HL market (a typo /
+        # delisted / renamed pair would silently and permanently false-DQ honest miners).
+        try:
+            from greevils_validator import scoring
+            from greevils_validator.hl_data import fetch_allowed_perps
+            live = fetch_allowed_perps()
+            dead = sorted(p for p in scoring.ALLOWED_PAIRS if scoring.normalize_pair(p) not in live)
+            if dead:
+                logger.warning("ALLOWED_PAIRS has %d symbol(s) matching NO live HL market "
+                               "(typo/delisted -> would false-DQ): %s", len(dead), dead)
+            else:
+                logger.info("ALLOWED_PAIRS: all %d curated pairs match live HL markets",
+                            len(scoring.ALLOWED_PAIRS))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("could not validate ALLOWED_PAIRS against HL (%s)", e)
+
         while True:
             last_heartbeat[0] = time.time()
             try:
@@ -120,8 +161,10 @@ def main(network, netuid, coldkey, hotkey, api, once, log_level):
 
             if once:
                 break
-            logger.info("Next evaluation round in %d seconds", EVAL_INTERVAL)
-            _sleep_with_heartbeat(EVAL_INTERVAL, last_heartbeat, stop_event)
+            # First round at boot may run off-boundary; every round after lands at ~00:00 UTC.
+            secs = _seconds_until_next_utc_midnight()
+            logger.info("Next evaluation round at 00:00 UTC (in %d s)", secs)
+            _sleep_with_heartbeat(secs, last_heartbeat, stop_event)
     finally:
         stop_event.set()
         heartbeat_thread.join(timeout=2)

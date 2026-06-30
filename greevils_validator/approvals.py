@@ -1,7 +1,14 @@
 """Agent image-digest approval, governed by the highest-staked validator's on-chain commitment.
 
-Being a *valid* agent (live + healthy + attested, see api_client) is necessary but not
-sufficient for agent rewards: the agent's image digest must also be **approved**.
+An **approved** digest is one the top validator has manually reviewed -- the agent's now-PUBLIC
+(open-sourced) code -- and sanctioned as legit (not exploit-like). Approval therefore exists ONLY
+for open-sourced agents, and it governs the OPEN-SOURCE PHASE of the agent lane:
+
+  * GRACE (no agent approved yet): any *valid* agent (live + healthy + attested, see api_client)
+    earns -- there's nothing to approve while code is closed.
+  * OPEN (>=1 approved): ONLY approved (open-sourced + reviewed) agents earn; the rest get 0.
+
+A non-empty approved set is thus the one-way latch into the open-source phase.
 
 The approved set can grow without bound (one digest per agent), but an on-chain commitment is
 capped at 128 bytes -- so the set is NOT stored on-chain. Instead:
