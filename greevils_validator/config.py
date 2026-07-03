@@ -9,9 +9,15 @@ import os
 # Same default as greevils-cli.
 GREEVILS_API = os.getenv("GREEVILS_API", "https://api.greevils.ai")
 
-# One round = one UTC day (the loop fires at 00:00 UTC). Subnet emission fields are PER-BLOCK
-# rates, so a round's emission = per-block * BLOCKS_PER_ROUND. Override if block time/cadence differ.
-BLOCKS_PER_ROUND = int(os.getenv("BLOCKS_PER_ROUND", str(24 * 60 * 60 // 12)))  # 1 day / ~12s = 7200
+# Fixed Bittensor constants (block time is protocol-wide; a scoring round is one UTC day; tempo is
+# read from chain at runtime, EPOCH_TEMPO_FALLBACK is used only if that read fails).
+#   - SCORING runs once per UTC day at the 00:00 boundary; a round's emission = per-block rate x
+#     BLOCKS_PER_ROUND (subnet emission fields are per-block).
+#   - WEIGHTS are re-set every epoch (tempo) so last_update stays within activity_cutoff and the
+#     validator's weights keep counting in consensus.
+BLOCK_TIME_SECONDS = 12                                 # seconds per block
+BLOCKS_PER_ROUND = 24 * 60 * 60 // BLOCK_TIME_SECONDS    # 7200: blocks of emission in one daily round
+EPOCH_TEMPO_FALLBACK = 360                              # epoch length (blocks) if tempo can't be read
 
 # Human-arena emission cap. One unified tournament over agents AND humans, split into a human
 # pool and an agent pool distributed by the SAME unified score. The human pool is sized in

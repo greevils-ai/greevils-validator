@@ -99,6 +99,6 @@ def calculate_rewards(
     if not any(rewards):
         logger.warning(
             "calculate_rewards: all zeros (round will burn) -- no eligible, "
-            "non-eliminated winners (or the data layer is not yet wired)"
+            "non-eliminated winners this round"
         )
     return rewards

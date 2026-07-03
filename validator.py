@@ -1,7 +1,9 @@
 """Greevils subnet validator.
 
-Runs an evaluation round daily at 00:00 UTC (the day boundary). Each round verifies
-miners' on-chain Hyperliquid ownership claims, classifies each account as a greevil agent or
+Scores once per UTC day at the 00:00 boundary, then re-sets the resulting weight vector every
+epoch (tempo) so the validator's last_update stays within activity_cutoff and keeps counting in
+consensus. Each daily round verifies miners' on-chain Hyperliquid ownership claims, classifies
+each account as a greevil agent or
 a human via greevils-api, scores EVERYONE in one unified tournament (agents and humans play
 each other) with calculate_rewards, splits emissions into an agent pool and a human pool by
 that score (the human pool capped in dollar terms, agents absorbing the rest), burns whatever
@@ -23,7 +25,12 @@ import time
 import bittensor as bt
 import click
 
-from greevils_validator.config import GREEVILS_API, HEARTBEAT_TIMEOUT
+from greevils_validator.config import (
+    BLOCK_TIME_SECONDS,
+    EPOCH_TEMPO_FALLBACK,
+    GREEVILS_API,
+    HEARTBEAT_TIMEOUT,
+)
 
 
 def _seconds_until_next_utc_midnight() -> float:
@@ -55,8 +62,8 @@ def heartbeat_monitor(last_heartbeat, stop_event):
 def _sleep_with_heartbeat(seconds, last_heartbeat, stop_event):
     """Sleep up to `seconds`, refreshing the heartbeat so the watchdog doesn't fire.
 
-    The eval interval (24h) is far longer than HEARTBEAT_TIMEOUT (10m), so we can't just
-    time.sleep -- we wake every 30s to mark ourselves alive.
+    The sleep until the next 00:00 UTC round (up to ~24h) is far longer than HEARTBEAT_TIMEOUT
+    (10m), so we can't just time.sleep -- we wake every 30s to mark ourselves alive.
     """
     deadline = time.time() + seconds
     while time.time() < deadline and not stop_event.is_set():
@@ -83,6 +90,23 @@ def set_weights(subtensor, wallet, netuid, uids, weights):
     else:
         logger.warning("Failed to set weights: %s", message)
     return success
+
+
+def _epoch_tempo(subtensor, netuid: int) -> int:
+    """Epoch length (tempo) in blocks, read from chain with fallbacks. Weights are re-set once
+    per epoch so the validator's last_update stays within activity_cutoff and keeps counting."""
+    for getter in (
+        lambda: subtensor.tempo(netuid),
+        lambda: subtensor.get_subnet_hyperparameters(netuid).tempo,
+        lambda: subtensor.subnet(netuid).tempo,
+    ):
+        try:
+            t = int(getter())
+            if t > 0:
+                return t
+        except Exception:  # noqa: BLE001 -- accessor varies by SDK version; fall through
+            continue
+    return EPOCH_TEMPO_FALLBACK
 
 
 @click.command()
@@ -147,12 +171,33 @@ def main(network, netuid, coldkey, hotkey, api, once, log_level):
         except Exception as e:  # noqa: BLE001
             logger.warning("could not validate ALLOWED_PAIRS against HL (%s)", e)
 
+        last_scored_day = None       # UTC date of the most recent scoring round
+        cached = None                # (uids, weights) from that round -- re-set every epoch
+        last_set_block = None        # metagraph.block when we last set weights
+
         while True:
             last_heartbeat[0] = time.time()
+            tempo = EPOCH_TEMPO_FALLBACK
             try:
                 metagraph.sync(subtensor=subtensor)
-                uids, weights = run_evaluation_round(subtensor, metagraph, netuid, api)
-                set_weights(subtensor, wallet, netuid, uids, weights)
+                tempo = _epoch_tempo(subtensor, netuid)
+                today = dt.datetime.now(dt.timezone.utc).date()
+
+                # SCORING -- once per UTC day. The daily round snapshots the just-sealed day into
+                # the DB at the 00:00 boundary (exact equity), then scores the unified tournament.
+                if today != last_scored_day:
+                    uids, weights = run_evaluation_round(subtensor, metagraph, netuid, api)
+                    cached = (uids, weights)
+                    last_scored_day = today
+
+                # WEIGHTS -- re-set the cached vector once per epoch so last_update stays fresh.
+                # A daily-only cadence (7200 blocks) exceeds activity_cutoff (~5000) and would drop
+                # the validator from consensus for hours each day; re-setting every epoch (tempo
+                # blocks) keeps it active. The vector itself only changes at the daily rescore.
+                due = last_set_block is None or (metagraph.block - last_set_block) >= tempo
+                if cached and due:
+                    if set_weights(subtensor, wallet, netuid, *cached):
+                        last_set_block = metagraph.block
             except KeyboardInterrupt:
                 logger.info("Validator stopped by user")
                 break
@@ -161,9 +206,12 @@ def main(network, netuid, coldkey, hotkey, api, once, log_level):
 
             if once:
                 break
-            # First round at boot may run off-boundary; every round after lands at ~00:00 UTC.
-            secs = _seconds_until_next_utc_midnight()
-            logger.info("Next evaluation round at 00:00 UTC (in %d s)", secs)
+            # Wake at the sooner of the next 00:00 UTC (to re-score on the day boundary) or one
+            # epoch (to refresh weights). Between midnights we only re-set weights, never re-score.
+            epoch_secs = max(60.0, tempo * BLOCK_TIME_SECONDS)
+            secs = min(_seconds_until_next_utc_midnight(), epoch_secs)
+            logger.info("Next wake in %d s (re-score at 00:00 UTC; weights every %d-block epoch)",
+                        secs, tempo)
             _sleep_with_heartbeat(secs, last_heartbeat, stop_event)
     finally:
         stop_event.set()

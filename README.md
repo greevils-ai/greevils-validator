@@ -88,7 +88,9 @@ python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 ```
 
 The validator hotkey must be **registered on the subnet** (it sets weights). The first round runs
-immediately at boot; every round after fires at **00:00 UTC**. A heartbeat watchdog re-execs the
+immediately at boot; **scoring** then fires at **00:00 UTC** each day, while **weights are re-set every
+epoch** (tempo) in between — so the validator's `last_update` stays within `activity_cutoff` and its
+weights keep counting in consensus rather than going stale for hours between daily rounds. A heartbeat watchdog re-execs the
 process if a round hangs past `HEARTBEAT_TIMEOUT`. CLI flags (`--network --netuid --coldkey
 --hotkey --api --once --log-level`) are each backed by env (`NETWORK NETUID WALLET_NAME
 HOTKEY_NAME LOG_LEVEL`).
@@ -99,9 +101,11 @@ HOTKEY_NAME LOG_LEVEL`).
   (`greevils_validator.sqlite`) is *relative* — on an ephemeral filesystem or from a changed working
   directory, a restart silently opens a fresh empty db. Equity/flow re-backfill from HL, but the
   **indelible DQ table is lost and unrecoverable** (a permanently-DQ'd account could re-enter).
-- **Fire rounds at 00:00 UTC.** The loop self-schedules to the boundary; that timing is what makes
-  each recorded day's equity snapshot exact. A round forced far off-boundary writes that day's
-  equity as the *current* value (`net_flow` is protected — forced to 0).
+- **Score at 00:00 UTC; set weights every epoch.** The loop self-schedules the daily **scoring** round
+  to the 00:00 boundary (that timing is what makes each day's equity snapshot exact), and re-sets the
+  cached weight vector every **epoch** in between so `last_update` stays within `activity_cutoff`. A
+  scoring round forced far off-boundary writes that day's equity as the *current* value (`net_flow` is
+  protected — forced to 0). `tempo` is read from chain; `EPOCH_TEMPO_FALLBACK` (360) is the fallback.
 - **greevils-api must be reachable** for the agent lane to function; otherwise every account is a
   human and the agent pool burns.
 
@@ -118,7 +122,6 @@ Wallet / network / netuid are CLI options (above). Everything else is env-driven
 | `HUMAN_SHARE_CAP` | `0.50` | hard ceiling on the human pool (clamped to [0,1]) |
 | `HUMAN_PNL_K` | `0.1` | human emission-$ ≤ `k` × human realized PnL-$ |
 | `PNL_WINDOW_DAYS` | `1` | horizon for both human PnL and emission |
-| `BLOCKS_PER_ROUND` | `7200` | blocks/round for sizing emission USD (1 day ÷ ~12 s) |
 | `TAO_USD_URL` / `TAO_USD_FALLBACK` | CoinGecko / `0` | TAO→USD for the human cap; failure → cap 0, never a crash |
 | `EMISSION_ALPHA_PER_ROUND` / `ALPHA_TAO_PRICE` | `0` / `0` | manual overrides if SDK reads are unavailable (0 → read on-chain) |
 | `BUILDER_FEE_BPS` / `BUILDER_FEE_TOL_BPS` | `5` / `0.5` | builder-fee rate + match tolerance (bps) |
