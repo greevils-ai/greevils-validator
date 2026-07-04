@@ -94,12 +94,23 @@ def mark_disqualified(conn, address: str, reason: str) -> None:
     conn.commit()
 
 
-def record_live_day(conn, address: str, day: dt.date) -> None:
-    """Snapshot HL now and write the EXACT row for `day` (intended ~00:00 UTC of day+1)."""
+def record_live_day(conn, address: str, day: dt.date, now: dt.datetime | None = None) -> bool:
+    """Snapshot HL now and write the EXACT 'live' row for `day`; return True if it wrote, else False.
+
+    An exact live snapshot is only valid AT the day boundary (`now` == day's close, ~00:00 UTC of
+    day+1). Taken far from it, `now`'s equity belongs to a LATER day -- and the account may not even
+    have existed on `day`. So an OFF-BOUNDARY snapshot writes NOTHING and lets backfill -- which is
+    bounded to the account's real portfolio history -- reconstruct the day instead (correctly dated,
+    no wrong-day equity, no phantom pre-genesis row)."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    boundary = dt.datetime(day.year, day.month, day.day, tzinfo=dt.timezone.utc) + dt.timedelta(days=1)
+    if abs((now - boundary).total_seconds()) > _LIVE_BOUNDARY_TOLERANCE:
+        return False  # off-boundary: defer to backfill (correctly dated / no phantom row)
+
     ch = _clearinghouse(address)
     ms = ch.get("marginSummary")
     if not ms:
-        return
+        return False
     equity = float(ms["accountValue"])
     unreal = sum(float(p["position"].get("unrealizedPnl", 0) or 0) for p in ch.get("assetPositions", []))
 
@@ -115,12 +126,9 @@ def record_live_day(conn, address: str, day: dt.date) -> None:
     funding = sum(float(u.get("delta", {}).get("usdc", 0)) for u in fund)
 
     prev = _prev_row(conn, address, day)
-    boundary = dt.datetime(day.year, day.month, day.day, tzinfo=dt.timezone.utc) + dt.timedelta(days=1)
-    off_boundary = abs((dt.datetime.now(dt.timezone.utc) - boundary).total_seconds()) > _LIVE_BOUNDARY_TOLERANCE
-    if prev is None or prev[3] == "backfill" or off_boundary:
-        # No trustworthy residual: no prior row, OR the prior row's unreal is from candle marks
-        # (a different source than this clearinghouse unreal, so the delta would be corrupt), OR
-        # this snapshot was taken far from the day boundary. Fall back to a flow-neutral baseline.
+    if prev is None or prev[3] == "backfill":
+        # No trustworthy residual: no prior row, OR the prior row's unreal is from candle marks (a
+        # different source than this clearinghouse unreal, so the delta would be corrupt). Baseline.
         net_flow = 0.0
     else:
         _, prev_eq, prev_unreal, _ = prev
@@ -134,6 +142,7 @@ def record_live_day(conn, address: str, day: dt.date) -> None:
         "unreal=excluded.unreal, source='live'",
         (address, day.isoformat(), equity, net_flow, volume, unreal))
     _bump_observations(conn, address, {f["coin"] for f in day_fills})
+    return True
 
 
 def backfill(conn, address: str, account_type: str, upto: dt.date) -> None:
@@ -152,18 +161,20 @@ def backfill(conn, address: str, account_type: str, upto: dt.date) -> None:
     _bump_observations(conn, address, set(md.observations or []))
 
 
-def update_account(conn, address: str, account_type: str) -> None:
-    """Bring the DB current for one account: record the latest complete day LIVE, and
-    backfill (reconstruct) any earlier missing days. Idempotent; cheap in steady state."""
-    sealed = dt.datetime.now(dt.timezone.utc).date() - dt.timedelta(days=1)  # last complete UTC day
+def update_account(conn, address: str, account_type: str, now: dt.datetime | None = None) -> None:
+    """Bring the DB current for one account: record the latest complete UTC day -- LIVE when the
+    snapshot lands on the day boundary, else RECONSTRUCTED via backfill -- plus any earlier gap.
+    Idempotent; cheap in steady state."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    sealed = now.date() - dt.timedelta(days=1)  # last complete UTC day
     have = {r[0] for r in conn.execute("SELECT day FROM daily WHERE address=?", (address,))}
-    # Backfill only when there's a real gap below `sealed` (cold start or downtime),
-    # so steady state never re-reconstructs history.
     if sealed.isoformat() not in have:
         prior_missing = not have or max(have) < (sealed - dt.timedelta(days=1)).isoformat()
-        if prior_missing:
+        # An exact live snapshot only lands at the day boundary; off-boundary it writes nothing, so
+        # we reconstruct `sealed` from backfill instead (correctly dated, bounded to real history).
+        wrote_live = record_live_day(conn, address, sealed, now=now)
+        if prior_missing or not wrote_live:
             backfill(conn, address, account_type, upto=sealed)
-        record_live_day(conn, address, sealed)
     conn.commit()
 
 
