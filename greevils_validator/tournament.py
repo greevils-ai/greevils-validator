@@ -305,9 +305,9 @@ def tournament_weights(
 
     # Human pool size: dollar-tethered (agent-independent), capped. PnL is compared on the
     # SAME horizon as the emission (window_days=1 -> that day's PnL vs that day's emission);
-    # a net-losing human lane funds nothing.
-    pnl_h = sum(_window_dollars(mn.records, end_date, window_days) for mn in humans)
-    pnl_h = max(0.0, pnl_h) / window_days if window_days > 0 else 0.0
+    # a net-losing human earns nothing.
+    pnl_h = sum(max(0.0, _window_dollars(mn.records, end_date, window_days)) for mn in humans)
+    pnl_h = pnl_h / window_days if window_days > 0 else 0.0
     if (
         human_score > 0.0
         and pnl_h > 0.0

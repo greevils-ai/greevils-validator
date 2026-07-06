@@ -283,8 +283,9 @@ open-source phase (§7a).
 - **The human pool is dollar-capped.** The human emission, valued in USD, is at most `**k = 0.1`× the
 dollars the human lane made that day** — i.e. humans are paid emission worth up to a tenth of what they
 earned — and **never more than 50%** of the round. The bound does **not** depend on how many agents run.
-  - `human_PnL_$` = the eligible humans' aggregate flow-adjusted PnL over the **same 1-day horizon** as the
-  emission, **net** — a net-losing human lane funds nothing.
+  - `human_PnL_$` = the **sum of the *winning* humans'** flow-adjusted PnL over the **same 1-day horizon** as
+  the emission. The pool is empty only if **no** human made
+  money that day.
   - `emission_value_$` = the USD value of one round's emission = `alpha emitted × alpha→TAO × TAO→USD`.
 - **Agents absorb the rest.** Whatever the cap leaves flows to the agent pool — *unless there are no
 eligible agents*, in which case it **burns**.
@@ -369,7 +370,7 @@ review closed code, so there is **no approval before open-sourcing**.
 | ----------------- | --------- | ----------------------------------------------------------------- |
 | `HUMAN_SHARE_CAP` | **50%**   | hard ceiling on the human pool, any regime                        |
 | `HUMAN_PNL_K`     | **0.1**   | human emission-$ ≤ `k` × human realized PnL-$ (a tenth)           |
-| `PNL_WINDOW_DAYS` | **1 day** | horizon for both human PnL and emission (net) — the payout period |
+| `PNL_WINDOW_DAYS` | **1 day** | horizon for both human PnL and emission — the payout period (PnL = sum of winning humans) |
 
 
 ### 8d. Allowed pairs
@@ -424,11 +425,12 @@ Things miners most often miss:
   earns from day one just by surviving elimination and trading at least once; the **dollar cap** (§7), not
   a floor, bounds the human lane. To draw from the **agent** pool you only need to be a **valid agent**
   (RUNNING + HEALTHY + PASS); on-chain approval is required only once the open-source phase starts (§7a).
-11. **The human pool is a tenth of what humans made, capped at 50%.** The human lane's share is
-  `min(50%, 0.1 · human_PnL$ / emission_value$)`: **$0 → nothing**, and humans are paid emission worth at
-    most a *tenth* of the dollars they earned that day. *Making money is the only way to unlock human
-    emission*; the rest flows to agents. A unified score also means **beating an agent raises your human
-    score** (and vice-versa): your pool decides where you're paid *from*, your score reflects the *whole field*.
+11. **The human pool is a tenth of what the *winning* humans made, capped at 50%.** The share is
+  `min(50%, 0.1 · Σ max(0, human_PnL)$ / emission_value$)` — each human contributes `max(0, its PnL)`.
+  No winners → nothing; otherwise humans are paid emission worth at most a *tenth* of the dollars the
+  winners earned that day. *Making money is the only way to unlock human emission*; the rest flows to agents.
+  A unified score also means **beating an agent raises your human score** (and vice-versa): your pool
+  decides where you're paid *from*, your score reflects the *whole field*.
 12. **Emission is alive from day one — but the agent lane has a one-way switch.** Before any agent is
     approved, every *valid* agent (closed-source OK) earns from day one with **no eligibility gate** (just
     don't get eliminated, and actually trade). The first agent to open-source **and get approved** — the

@@ -43,8 +43,7 @@ Each round the validator:
    → [tournament.py](greevils_validator/tournament.py), [scoring.py](greevils_validator/scoring.py)
 6. **Splits emissions** into a human pool and an agent pool by the same unified score:
    `human_share = min(HUMAN_SHARE_CAP, HUMAN_PNL_K · human_PnL$ / emission_USD)`, and
-   `agent_share = 1 − human_share`. The human pool is dollar-tethered (a net-losing human lane
-   funds nothing); agents absorb the rest.
+   `agent_share = 1 − human_share`. `human_PnL$` is the sum of the winning humans; agents absorb the rest.
    → [tournament.py](greevils_validator/tournament.py), [pricing.py](greevils_validator/pricing.py)
 7. **Burns** whatever is unawarded (no eligible agents, missing price feed, a lone miner, …) to
    `BURN_UID`, and **sets weights** on-chain.
