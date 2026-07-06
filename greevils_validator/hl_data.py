@@ -177,14 +177,15 @@ def build_miner_data(address: str, account_type: str) -> tuple[MinerData, dict[d
         i = bisect.bisect_right(ts_list, t)
         return vals[i - 1] if i > 0 else None
 
-    first_day = _day(av_series[0][0])
-    if fills:
-        first_day = min(first_day, _day(min(f["time"] for f in fills)))
+    dep_i = next((i for i, s in enumerate(av_series) if s[1] > 0.0), 0)
+    deposit_eq = av_series[dep_i][1]
+    deposit_pnl = _at(pnl_ts, pnl_v, av_series[dep_i][0]) or 0.0
+    first_day = _day(av_series[dep_i][0])
     today = dt.datetime.now(dt.timezone.utc).date()
     one = dt.timedelta(days=1)
 
-    records: list[DailyRecord] = []
-    prev_eq = prev_pnl = None
+    records: list[DailyRecord] = [DailyRecord(first_day - one, deposit_eq, 0.0, 0.0)]
+    prev_eq, prev_pnl = deposit_eq, deposit_pnl
     d = first_day
     while d <= today:
         boundary = int(dt.datetime(d.year, d.month, d.day, tzinfo=dt.timezone.utc).timestamp() * 1000) + _DAY_MS
@@ -193,17 +194,14 @@ def build_miner_data(address: str, account_type: str) -> tuple[MinerData, dict[d
             d += one
             continue
         pn = _at(pnl_ts, pnl_v, boundary) or 0.0     # HL's cumulative perp PnL at end-of-day d
-        if prev_eq is None:
-            net_flow = 0.0                           # baseline (daily_pct ignores the first record's flow)
-        else:
-            net_flow = (eq - prev_eq) - (pn - prev_pnl)  # residual = capital flow, spot/perp-agnostic
+        net_flow = (eq - prev_eq) - (pn - prev_pnl)  # residual = capital flow, spot/perp-agnostic
         records.append(DailyRecord(d, eq, net_flow, vol[d]))
         prev_eq, prev_pnl = eq, pn
         d += one
 
     # Anchor the latest day to exact live equity (clearinghouse); keep its residual net_flow.
     ch = _clearinghouse(address)
-    if records and ch.get("marginSummary"):
+    if len(records) > 1 and ch.get("marginSummary"):
         true_eq = float(ch["marginSummary"]["accountValue"])
         records[-1] = DailyRecord(records[-1].date, true_eq, records[-1].net_flow, records[-1].volume)
 
