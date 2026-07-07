@@ -150,7 +150,7 @@ def matchup_score(
     if series is None:
         series = (daily_pct(miner.records, miner.gap_dates), _daily_dollars(miner.records))
     bonus_R, bonus_X = longevity_bonus(series[0], series[1], overlap_start, kappa, H)
-    util = compute_utility(m.R + bonus_R, m.X + bonus_X, m.D, m.V, m.K, m.scored_days)
+    util = compute_utility(m.R + bonus_R, m.X + bonus_X, m.D, m.V, m.K, m.conc_ramp_days)
     pun = compute_punishment(m.rolling_30d_pnl, m.Q_EV)
     s = util.performance_score_G * pun.M_total
     return s if math.isfinite(s) and s > 0.0 else 0.0

@@ -85,9 +85,10 @@ ETA = 0.75         # weight on concentration penalty = -ETA*max(0, K-K0). Anchor
                    # luck/repeatability gate -- dormant for 7+ profit-day accounts, bites the day-wonders.
 K0 = 0.14          # concentration threshold = 1/7.1: no penalty if profit is spread over ~7+ effective
                    # days (K = 1/effective-profit-days); below that the penalty grows.
-CONC_RAMP_DAYS = 14  # concentration penalty ramps to full over this many days, scaled by
-                     # min(1, scored_days/CONC_RAMP_DAYS): a short history can't have spread its profit,
-                     # so it is only lightly penalized at first (day 1 ~= 1/14 of full), full by ~14 days.
+CONC_RAMP_DAYS = 14  # concentration penalty ramps to full over this many NON-PROFIT days, scaled by
+                     # min(1, (1+non_profit_days)/CONC_RAMP_DAYS): the ramp advances ONLY on days that
+                     # added no profit (flat/down), so a run of profitable days freezes it at the day-1
+                     # level (~1/14) while a one-day-wonder that then goes idle still reaches full by ~14 days.
 ALPHA = 1.5        # performance-transform curvature = exponent on the money-multiple. Since
                    # G ∝ (1+R)^ALPHA - 1, each doubling of a trader's book multiplies its PvP score by
                    # 2^ALPHA (~2.83x at 1.5). Kept <=~2 so a lone 10x outlier can't bulldoze the tournament.
@@ -438,8 +439,9 @@ class Metrics:
     rolling_30d_pnl: float       # sum of the last-30-day daily %s (punished) -> M_P
     Q_EV: float                 # trailing-14d executed value / avg capital
     peak_equity: float
-    scored_days: int = 0        # number of daily-% observations in this window; scales the
-                                # concentration penalty by min(1, scored_days/CONC_RAMP_DAYS)
+    scored_days: int = 0        # number of daily-% observations in this window (informational)
+    conc_ramp_days: int = 1     # 1 + non-profit days; scales the concentration penalty by
+                                # min(1, conc_ramp_days/CONC_RAMP_DAYS) -- climbs only on no-profit days
 
 
 def compute_metrics(
@@ -465,6 +467,7 @@ def compute_metrics(
     V = math.sqrt(sq_down / n_ret) if n_ret else 0.0
 
     K = _concentration_K(p for _, p in pct)
+    nonprofit_days = sum(1 for _, p in pct if p <= 0.0)
 
     # X / eligibility basis: REAL absolute trading PnL in $ (neutral, not punished).
     net_pnl = _real_absolute_pnl(records)
@@ -489,6 +492,7 @@ def compute_metrics(
         runtime_days=runtime_days, active_days=active_days,
         total_executed_value=total_ev, rolling_30d_pnl=rolling_30d,
         Q_EV=Q_EV, peak_equity=peak_equity(records), scored_days=len(pct),
+        conc_ramp_days=1 + nonprofit_days,
     )
 
 
@@ -556,16 +560,18 @@ def performance_transform(U_plus: float) -> float:
 
 
 def compute_utility(
-    R: float, X: float, D: float, V: float, K: float, scored_days: int | None = None
+    R: float, X: float, D: float, V: float, K: float, conc_ramp_days: int | None = None
 ) -> UtilityTerms:
     """U = ln(1+R) + BETA*ln(1+X/S) - LAMBDA*(D/D0)^2 - MU*softplus(V/V0-1,k)
-            - ETA * min(1, scored_days/CONC_RAMP_DAYS) * max(0, K-K0).
+            - ETA * min(1, conc_ramp_days/CONC_RAMP_DAYS) * max(0, K-K0).
 
     Rewards added, risk penalties subtracted. The constant log-hurdle term is omitted
     (it shifted every U equally and is enforced only in the eligibility gate). The
-    concentration penalty's WEIGHT ramps with ``scored_days`` (see CONC_RAMP_DAYS),
-    leaving K0 unchanged; None -> full weight (no-data degenerate path)."""
-    ramp = 1.0 if scored_days is None else min(1.0, scored_days / CONC_RAMP_DAYS)
+    concentration penalty's WEIGHT ramps with ``conc_ramp_days`` = 1 + non-profit days
+    (see CONC_RAMP_DAYS): it advances ONLY on days that added no profit, so a run of
+    profitable days freezes it at the day-1 level (1/14) and a one-day-wonder that then
+    goes idle still reaches full weight."""
+    ramp = 1.0 if conc_ramp_days is None else min(1.0, conc_ramp_days / CONC_RAMP_DAYS)
     return_term = math.log1p(R) if (1.0 + R) > 0.0 else -50.0
     absolute_pnl_term = BETA * math.log1p(max(0.0, X) / S)
     drawdown_term = -LAMBDA * (D / D0) ** 2
@@ -693,7 +699,7 @@ def evaluate(records: list[DailyRecord], account_type: str,
     m = compute_metrics(records, end_date, gap_dates)
     eligibility_failures = check_eligibility(account_type, m)
     eligible = not eligibility_failures
-    util = compute_utility(m.R, m.X, m.D, m.V, m.K, m.scored_days)
+    util = compute_utility(m.R, m.X, m.D, m.V, m.K, m.conc_ramp_days)
     pun = compute_punishment(m.rolling_30d_pnl, m.Q_EV)
 
     raw_score = util.performance_score_G * pun.M_total
