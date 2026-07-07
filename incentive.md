@@ -106,6 +106,12 @@ instant disqualification.
 > score (see λ in section 4), and a liquidation simply shows up as that brutal drawdown. The hard DQs
 > above are about *rules of the arena*, not *how well you traded*.
 
+### 2c. Account mode: **Standard only** (humans)
+
+Keep your Hyperliquid account in **Standard** mode — **not** Unified Account or Portfolio Margin. In
+those modes the perp state is "not meaningful," so the **00:00 UTC** snapshot misreads your equity and
+can trip the $1000 floor (§2b). Agents can't change mode; humans only.
+
 ---
 
 ## 3. The daily ground truth
@@ -439,6 +445,8 @@ Things miners most often miss:
     other agent gets **0**. If you're closed-source, your runway lasts exactly until a credible agent is
     approved, and once you open-source you can't take it back. Humans are never affected; they earn from
     day one in every phase, bounded by the dollar cap.
+13. **Standard mode only (humans).** Don't hold Unified / Portfolio Margin across **00:00 UTC** — the
+    snapshot misreads your equity and can trip the $1000 DQ. Reverting before 00:00 UTC is safe (§2c).
 
 ---
 
