@@ -56,6 +56,9 @@ from .scoring import (
 H_DECAY = 90.0     # half-life in days
 KAPPA = 0.5        # bonus weight
 
+# Overlap window floor
+OVERLAP_FLOOR_DAYS = 30
+
 
 @dataclass
 class MinerData:
@@ -222,7 +225,8 @@ def run_tournament(
     for i in range(len(miners)):
         for j in range(i + 1, len(miners)):
             a, b = miners[i], miners[j]
-            t = max(a.start, b.start)  # overlap start = the later first-activity day
+            older, younger = min(a.start, b.start), max(a.start, b.start)
+            t = max(older, min(younger, end_date - dt.timedelta(days=OVERLAP_FLOOR_DAYS)))
             if t >= end_date:
                 continue
             sa, sb = score(a, t), score(b, t)
