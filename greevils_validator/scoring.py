@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 # it is scored by the single -LAMBDA*(D/D0)^2 utility term, which already drives a
 # catastrophic drawdown's score to ~0. The old hard cap and M_D multiplier were
 # removed as double-counts of this same metric D.
-EQUITY_FLOOR = 1000.0              # trading trough below $1000 -> eliminated
+EQUITY_FLOOR = 10000.0             # trading trough below $10000 -> eliminated
 GRACE_PERIOD_DAYS = 7              # dead-agent rule grace period after first activity
 DEAD_AGENT_WINDOW_DAYS = 14        # dead iff this many consecutive days with ZERO trading
 # No volume floor in the dead-agent rule -- a thin-but-alive account is handled by
@@ -314,8 +314,8 @@ def check_elimination(
     Rule 0 -- trading restriction (instant DQ on spot or off-whitelist pair; skipped
               if ``coins`` not provided).
     Rule 1 -- dead-agent / inactivity (continuous-grid, gap-aware via ``gap_dates``).
-    Rule 2 -- equity floor: RAW end-of-day balance < $1000 on ANY day -> eliminated
-              (a withdrawal below the floor counts; must keep >= $1000 at all times).
+    Rule 2 -- equity floor: RAW end-of-day balance < $10000 on ANY day -> eliminated
+              (a withdrawal below the floor counts; must keep >= $10000 at all times).
 
     Drawdown is intentionally NOT an elimination rule (scored by the -LAMBDA*(D/D0)^2
     utility term); D and peak are computed only for the informational result fields.
