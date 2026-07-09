@@ -100,6 +100,11 @@ EV_PENALTY = 0.50            # 50% haircut when Q_EV < 4
 Q_EV_THRESHOLD = 4.0         # Q_EV >= 4 -> no executed-value punishment. EV counts BOTH sides
                              # (entries+exits), so 4x avg capital over 14d ~= two round-trips (~weekly).
 
+# Return-percentage denominator floor: the daily return % divides by AT LEAST this much capital, so a
+# small account's big-percentage swings scale to a realistic size (a $300 gain on $1000 reads as +3%,
+# not +30%). Removes the small-account %-inflation edge -- with NO hard elimination (see EQUITY_FLOOR).
+RETURN_DENOM_FLOOR = 10000.0
+
 
 # ---------------------------------------------------------------------------
 # Daily data model
@@ -359,15 +364,18 @@ def net_pnl_pct(start_equity: float, end_equity: float, net_flow: float) -> floa
     """Flow-punishing daily return % (the agreed anti-gaming rule).
 
         S = start equity, E = end equity, N = net flow (deposits - withdrawals)
-        P = E - S - N  (trading PnL, flows removed)
+        P = E - S - N  (trading PnL, flows removed);  F = RETURN_DENOM_FLOOR
 
-        P > 0:  N > 0 -> P / (S + N)             N <= 0 -> (P + N) / S
-        P <= 0: N > 0 -> (P/S)·(1 + N/(S+N))     N <= 0 -> P / (S + N)
+        P > 0:  N > 0 -> P / max(S+N, F)     N <= 0 -> (P + N) / max(S, F)   # PROFIT: denom floored at F
+        P <= 0: N > 0 -> (P/S)·(1 + N/(S+N)) N <= 0 -> P / (S + N)           # LOSS: real denom (full loss)
 
+    The denominator floor applies to PROFIT days ONLY: a small account's GAINS scale to a realistic
+    size (a $300 gain on a $1000 account reads as +3%, not +30%), while its LOSSES still hit in FULL
+    (a $300 loss on $1000 is -30%) -- no upside %-inflation edge, and no downside leniency.
     Loss+deposit scales the LOSS RATE up by the fresh-deposit fraction (factor
     1..2) rather than counting the whole deposit as a loss -- a softer anti-rescue
-    penalty. KEY INVARIANT: for a single day ANY flow can only LOWER this value
-    versus the no-flow P/S, never raise it (brute-force verified), so it punishes
+    penalty. KEY INVARIANT: within each branch ANY flow can only LOWER this value,
+    never raise it (brute-force verified), so it punishes
     exploit-like flows (withdraw-after-profit, deposit-after-loss) and never rewards
     them. The lifetime R compounds these daily %s into a NAV, staying monotone in
     them. Returns a fraction (0.10 == +10%).
@@ -376,11 +384,12 @@ def net_pnl_pct(start_equity: float, end_equity: float, net_flow: float) -> floa
     if S <= 0:
         return 0.0
     P = end_equity - S - N
-    if P > 0:
-        return P / (S + N) if N > 0 else (P + N) / S
-    if N > 0:
-        return (P / S) * (1.0 + N / (S + N))  # loss+deposit: see docstring
-    d = S + N
+    if P > 0:                                # PROFIT day: denominator floored at RETURN_DENOM_FLOOR
+        F = RETURN_DENOM_FLOOR
+        return P / max(S + N, F) if N > 0 else (P + N) / max(S, F)
+    if N > 0:                                # LOSS + deposit: REAL denominator (no floor -- losses hit in full)
+        return (P / S) * (1.0 + N / (S + N))
+    d = S + N                                # LOSS: REAL denominator (no floor)
     return P / d if d > 0 else -1.0
 
 
