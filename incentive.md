@@ -84,7 +84,7 @@ instant disqualification.
 > immediately, so the lifetime minimums above apply **only to open-source agents in the open-source phase**
 > (§7a). For **every human** and for **agents during the grace period** (before any agent has open-sourced),
 > there is **no runtime / active-day / return / executed-value gate at all**. You only have to:
->   1. **survive elimination** (§2b — trade only through the builder app, keep ≥ $10,000, don't go dark 14 days, no spot, no unlisted pairs), and
+>   1. **survive elimination** (§2b — trade only through the builder app, keep ≥ $1000, don't go dark 14 days, no spot, no unlisted pairs), and
 >   2. **be measurable** — have actually traded (≥ 1 active day, so there's a return to score).
 >
 > Once an agent open-sources, *agents* face the full 60-day gate above; **humans never do** — they stay
@@ -98,7 +98,7 @@ instant disqualification.
 | **Builder app only**   | **Any** fill not routed through the Greevils builder app = DQ.                           |
 | **Allowed pairs only** | Trading any pair **not** on the whitelist (§8d) = DQ.                                    |
 | **No spot**            | Any **spot** trade (`@index` or `BASE/QUOTE`) = DQ. Perps only.                          |
-| **Equity floor**       | Account balance dropping **below $10,000 on any day** = DQ (a withdrawal below it counts). |
+| **Equity floor**       | Account balance dropping **below $1000 on any day** = DQ (a withdrawal below it counts). |
 | **Dead-agent**         | **14 consecutive days with zero trading** (after a 7-day grace) = DQ — abandonment.      |
 
 
@@ -110,7 +110,7 @@ instant disqualification.
 
 Keep your Hyperliquid account in **Standard** mode — **not** Unified Account or Portfolio Margin. In
 those modes the perp state is "not meaningful," so the **00:00 UTC** snapshot misreads your equity and
-can trip the $10,000 floor (§2b). Agents can't change mode; humans only.
+can trip the $1000 floor (§2b). Agents can't change mode; humans only.
 
 ---
 
@@ -360,7 +360,7 @@ review closed code, so there is **no approval before open-sourcing**.
 | Executed-value hurdle | **25 × A**  | lifetime turnover — open-phase agents only    |
 | **Grace/human gate**  | **none**    | day-one: only elimination + measurable (≥1 traded day) — every human, every grace agent |
 | **Open-source age**   | **60 days** | minimum runtime before an open-source claim is honored |
-| Equity floor          | **$10,000** | balance must stay above this every day (elimination) |
+| Equity floor          | **$1000**   | balance must stay above this every day (elimination) |
 | Dead-agent window     | **14 days** | max idle stretch before DQ (7-day grace) (elimination) |
 | Builder app           | **required**| every fill must carry the ~5 bps builder fee — off-app = DQ (elimination) |
 | `M_P` haircut         | **0.5**     | if trailing-30d PnL < 0                       |
@@ -424,7 +424,7 @@ Things miners most often miss:
 8. **You need a rival.** A lone eligible miner — with *no one else eligible in the whole field* (agent
   or human) — earns 0, and it burns. The mechanism rewards *beating the field*, not existing.
 9. **Trade only through the Greevils builder app** (every fill must carry the ~5 bps builder fee — a
-  single fill placed directly on Hyperliquid or via another app is a permanent DQ). Also: keep ≥ $10,000
+  single fill placed directly on Hyperliquid or via another app is a permanent DQ). Also: keep ≥ $1000
   at all times, never go dark for 14 days, never touch spot, never trade an unlisted pair — each is an
   instant DQ. (There is **no** leverage limit.)
 10. **Humans have NO eligibility gate** — no profit, volume, runtime, or active-day minimum. A human
@@ -446,7 +446,7 @@ Things miners most often miss:
     approved, and once you open-source you can't take it back. Humans are never affected; they earn from
     day one in every phase, bounded by the dollar cap.
 13. **Standard mode only (humans).** Don't hold Unified / Portfolio Margin across **00:00 UTC** — the
-    snapshot misreads your equity and can trip the $10,000 DQ. Reverting before 00:00 UTC is safe (§2c).
+    snapshot misreads your equity and can trip the $1000 DQ. Reverting before 00:00 UTC is safe (§2c).
 
 ---
 
