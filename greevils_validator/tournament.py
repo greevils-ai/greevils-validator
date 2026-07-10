@@ -60,6 +60,8 @@ KAPPA = 0.5        # bonus weight
 # Overlap window floor
 OVERLAP_FLOOR_DAYS = 30
 
+MATURITY_DAYS = 14
+
 
 @dataclass
 class MinerData:
@@ -156,7 +158,9 @@ def matchup_score(
     bonus_R, bonus_X = longevity_bonus(series[0], series[1], overlap_start, kappa, H)
     util = compute_utility(m.R + bonus_R, m.X + bonus_X, m.D, m.V, m.K, m.conc_ramp_days)
     pun = compute_punishment(m.rolling_30d_pnl, m.Q_EV)
-    s = util.performance_score_G * pun.M_total
+    full_runtime = (end_date - miner.start).days if miner.start else 0
+    maturity = min(1.0, full_runtime / MATURITY_DAYS) if MATURITY_DAYS > 0 else 1.0
+    s = util.performance_score_G * pun.M_total * maturity
     return s if math.isfinite(s) and s > 0.0 else 0.0
 
 
