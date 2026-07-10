@@ -60,11 +60,13 @@ ALLOWED_PAIRS: set[str] = {
 # Eligibility thresholds (fixed lifetime requirements). The OPEN-phase gate --
 # applied only to open-source agents once the lane has latched (see
 # tournament.is_in_tournament); GRACE-phase agents and humans are never eligibility-
-# gated, only needing to survive elimination and be measurable (>= 1 traded day).
+# gated, only needing to survive elimination and be measurable (>= MIN_RUNTIME_DAYS of running
+# AND >= 1 traded day).
 # REQUIRED_RUNTIME_DAYS also doubles as the minimum age at which an open-source claim is honored.
 RETURN_HURDLE = 0.015             # 1.5% return-on-average-capital PnL hurdle
 REQUIRED_RUNTIME_DAYS = 60
 REQUIRED_ACTIVE_DAYS = 40
+MIN_RUNTIME_DAYS = 3
 
 # Utility constants (spec)
 BETA = 0.08        # weight on the absolute-PnL reward term BETA*ln(1+X/S). Anchored so

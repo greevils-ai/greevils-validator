@@ -51,8 +51,10 @@ converted (the agent pool, and the dollar-capped human pool) is **§7**.
 
 **Why pairwise on the overlap?** It's the only fair comparison. Two miners are judged on the
 *same days* and the *same market regime*, so nobody is advantaged by having traded an easier period.
-The overlap is simply the span you **both** traded — emission is alive from day one (§2a), so it can be
-as short as a single shared day for two newcomers, or many months for two veterans.
+The overlap is the span you **both** traded, but **floored at 30 days**: two *young* accounts (both under
+30 days old) are each judged on their **full history**; a veteran meeting a newcomer is judged on at least
+the last **30 days**; only once both are past 30 days does it narrow to the plain shared span. This keeps a
+good young account from being reduced to a one-day overlap where its record would vanish into the baseline.
 
 > **Note:** Beating an opponent **by a bigger margin** is worth more than just beating them. And you
 > bank a margin from *every* opponent you beat — so consistently out-trading the field compounds.
@@ -80,15 +82,16 @@ instant disqualification.
 > round-trip of your whole book = **2× capital** of executed value. So "25× capital" lifetime ≈
 > **12–13 round-trips** of your book. Keep this in mind for the activity bars.
 
-> **Day-one (GRACE): there is NO eligibility gate — you can earn from day one.** Emission is alive
-> immediately, so the lifetime minimums above apply **only to open-source agents in the open-source phase**
-> (§7a). For **every human** and for **agents during the grace period** (before any agent has open-sourced),
-> there is **no runtime / active-day / return / executed-value gate at all**. You only have to:
->   1. **survive elimination** (§2b — trade only through the builder app, keep ≥ $1000, don't go dark 14 days, no spot, no unlisted pairs), and
->   2. **be measurable** — have actually traded (≥ 1 active day, so there's a return to score).
+> **GRACE: almost no eligibility gate — you can earn after just 3 days.** The lifetime minimums above apply
+> **only to open-source agents in the open-source phase** (§7a). For **every human** and for **agents during
+> the grace period** (before any agent has open-sourced), there is **no return / active-day / executed-value
+> gate** — only a **3-day minimum runtime**. You just have to:
+>   1. **survive elimination** (§2b — trade only through the builder app, keep ≥ $1000, don't go dark 14 days, no spot, no unlisted pairs),
+>   2. **run for ≥ 3 days** — you're first scored on your **3rd day** (`runtime` counts from your first recorded day, which for a new deposit is the day *before* your first trade), and
+>   3. **be measurable** — have actually traded (≥ 1 active day, so there's a return to score).
 >
 > Once an agent open-sources, *agents* face the full 60-day gate above; **humans never do** — they stay
-> day-one, bounded instead by the dollar cap (§7).
+> lightly-gated (3-day + measurable), bounded instead by the dollar cap (§7).
 
 ### 2b. Elimination (instant DQ — even one violation)
 
@@ -125,11 +128,17 @@ Deposits and withdrawals must **not** be able to fake performance. For a day wit
 end equity `E`, and net flow `N` (deposits − withdrawals), with trading PnL `P = E − S − N`:
 
 ```
-P > 0,  N > 0   ->  P / (S + N)            # profit while you topped up: diluted by the deposit
-P > 0,  N <= 0  ->  (P + N) / S            # profit while you withdrew
-P <= 0, N > 0   ->  (P/S) * (1 + N/(S+N))  # loss while you topped up: loss RATE amplified (anti-rescue)
-P <= 0, N <= 0  ->  P / (S + N)
+P > 0,  N > 0   ->  P / max(S+N, $10k)     # PROFIT + deposit: diluted; denominator floored at $10k
+P > 0,  N <= 0  ->  (P + N) / max(S, $10k) # PROFIT (+ any withdrawal): denominator floored at $10k
+P <= 0, N > 0   ->  (P/S) * (1 + N/(S+N))  # LOSS + deposit: loss RATE amplified (anti-rescue); REAL denom
+P <= 0, N <= 0  ->  P / (S + N)            # LOSS: REAL denom (full loss, no floor)
 ```
+
+> **Profit-day denominator floor ($10,000).** On **profit** days the % divides by **at least $10,000** of
+> capital, so a small account's gains scale to a realistic size — a **$300 gain on a $1,000 account reads as
+> +3%, not +30%**. **Loss** days use your *real* balance (a $300 loss on $1,000 is a full **−30%**): no
+> upside %-inflation, no downside leniency. Accounts already at/above $10k are unaffected. (This is a soft
+> scoring adjustment — it is **not** an elimination; the hard equity floor is still $1,000, §2b.)
 
 > **You cannot game the % with flows.** Any deposit/withdrawal can only **lower** your daily % versus
 > the no-flow case — never raise it. Rescue-deposits-after-a-loss and withdraw-after-a-profit are both
@@ -165,10 +174,10 @@ U =  ln(1 + R)                         # return  (reward)
    + 0.08 * ln(1 + X / 1000)           # absolute profit  (reward)
    - 0.308 * (D / 0.10)^2              # drawdown penalty
    - 0.15  * softplus( V/0.02 - 1 )    # downside-vol penalty
-   - 0.75 * min(1, n/14) * max(0, K - 0.14)   # concentration penalty (ramps to full over 14 days)
+   - 0.75 * min(1, (1 + non_profit_days)/14) * max(0, K - 0.14)   # concentration penalty
 
 where  softplus(x) = ln(1 + e^(6x)) / 6
-       n = scored days in the window
+       non_profit_days = days in the window that added NO profit (flat or down)
 ```
 
 Each term has a **deliberate, anchored meaning** (this is what to optimize):
@@ -183,12 +192,12 @@ Quadratic — it ramps fast. **Protecting your equity curve matters more than an
 - `**−μ·softplus(V/V0−1)` — downside vol (μ=0.15, V0=0.02).**
 *Anchor: 5% daily downside-vol ≡ a 25% return penalty; nothing below 2%.* Rewards smooth equity
 curves over jagged ones; it's the *junior* risk signal (drawdown is senior).
-- `**−η·min(1, n/14)·max(0, K−K0)` — concentration (η=0.75, K0=0.14).**
-*Anchor: all profit in one lucky day ≡ a ~90% return penalty — but **only once you've had ~14 days to
-spread it**.* Punishes one-day-wonders; rewards a repeatable edge. **The penalty ramps with your history
-length** (`min(1, n/14)`, `n` = days in the window): a short history *couldn't* spread its profit, so it's
-only lightly penalized — **day 1 pays ~1/14 of the full hit** (so a real first day scores) — reaching full
-strength by ~14 days. A long history that crams all profit into one day still eats the full penalty.
+- `**−η·min(1, (1+non_profit_days)/14)·max(0, K−K0)` — concentration (η=0.75, K0=0.14).**
+*Anchor: all profit in one lucky day ≡ a ~90% return penalty.* Punishes one-day-wonders; rewards a
+repeatable edge. **The ramp advances only on *non-profit* days** (flat or down): keep posting **profitable**
+days and it *freezes* at the day-1 level (~1/14) — and since more green days also lower `K`, the penalty only
+*shrinks* as you keep printing. It climbs toward full strength only when you **stall** (flat/losing days) or
+go idle after one lucky spike — the classic one-day-wonder — reaching full by ~14 non-profit days.
 
 > **Drawdown dominates.** If you remember one thing: a 15% drawdown is as costly as failing to double
 > your money. Mediocre-but-smooth beats brilliant-but-violent.
@@ -300,21 +309,21 @@ all-ineligible field, a missing price feed (human cap → 0), or a pool with no 
 
 ### 7a. The agent lane: grace → open-source
 
-The agent lane is **alive from day one** and has two phases. The switch is **approval**: an agent
+The agent lane is **alive early** (scoring starts on your 3rd day, §2a) and has two phases. The switch is **approval**: an agent
 open-sources its code (only possible at ≥ 60 days), the **highest-staked validator manually reviews that
 now-public code** — is it legit, not exploit-like? — and, if so, **approves** it on-chain. You can't
 review closed code, so there is **no approval before open-sourcing**.
 
 | Phase | When | Who earns the agent pool |
 |---|---|---|
-| **Grace** | *Before any agent is approved* | **Any valid agent** (`RUNNING + HEALTHY + PASS`, closed-source OK) that survives elimination and is measurable — **no eligibility gate** (§2a). Emission flows from the very first days; scoring handles quality. |
+| **Grace** | *Before any agent is approved* | **Any valid agent** (`RUNNING + HEALTHY + PASS`, closed-source OK) that survives elimination, has run **≥ 3 days**, and is measurable — **no return/volume gate** (§2a). Emission flows from its 3rd day; scoring handles quality. |
 | **Open-source** | The moment the top validator **approves** an open-sourced agent (latches permanently) | **Only approved (open-sourced + reviewed) agents.** Every other agent earns **0**; the approved agents face the full 60-day eligibility gate. |
 
 - **Approval requires open-sourcing**, which is only possible at **≥ 60 days** of runtime — a younger agent can't be approved and does **not** latch the lane.
 - The switch is a **one-way latch**: once the first agent is approved, the lane stays in the open-source phase even if that agent later leaves. Open-source *only when you're ready to commit* — the first approval flips the whole lane for everyone.
-- **Humans are unaffected by these phases** — they always earn from day one with no eligibility gate, capped as above.
+- **Humans are unaffected by these phases** — they always earn from their 3rd day with no return/volume gate, capped as above.
 
-> **Strategic read:** while no agent is approved, a strong *closed-source* agent can earn the lane from day one. But the first **approved** open-source agent **shuts every other agent out** (closed-source *and* not-yet-approved). If you're closed-source, your edge lasts exactly until a credible agent open-sources and gets approved.
+> **Strategic read:** while no agent is approved, a strong *closed-source* agent can earn the lane from its 3rd day. But the first **approved** open-source agent **shuts every other agent out** (closed-source *and* not-yet-approved). If you're closed-source, your edge lasts exactly until a credible agent open-sources and gets approved.
 
 > **Why a dollar cap instead of a fixed cut?** Humans are a benchmark/bootstrap class, not the product.
 > A fixed % pays them whether or not they produced value. The cap pays them **only in proportion to the
@@ -343,10 +352,12 @@ review closed code, so there is **no approval before open-sourcing**.
 | `k`    | softplus sharpness      | **6**       | elbow sharpness of the vol penalty                   |
 | `η`    | concentration weight    | **0.75**    | one lucky day ≡ a 90% return penalty                 |
 | `K0`   | concentration threshold | **0.14**    | free if profit spread over ~7+ days (`1/7.1`)        |
-| conc. ramp | concentration ramp days | **14**  | penalty scales `min(1, n/14)` — full strength by ~14 days |
+| conc. ramp | concentration ramp days | **14**  | penalty scales `min(1,(1+non_profit_days)/14)` — advances only on flat/down days |
 | `α`    | transform exponent      | **1.5**     | each doubling vs a rival → score ×2^1.5 ≈ 2.83       |
 | `κ`    | longevity weight        | **0.5**     | lifelong record ≈ one 60-day live window             |
 | `H`    | longevity half-life     | **90 days** | track record halves in weight every 90 days          |
+| return-denom floor | profit-day % divisor floor | **$10,000** | profit-day return divides by ≥ this (§3); loss days use real balance |
+| overlap floor | min comparison window | **30 days** | pair window floored to ≥30d; young accounts on full history (§1) |
 
 
 ### 8b. Gate & haircut constants
@@ -358,7 +369,7 @@ review closed code, so there is **no approval before open-sourcing**.
 | Required active days  | **40 days** | minimum days with a fill — open-phase agents only |
 | Return hurdle         | **1.5%**    | minimum sum-of-daily-%s — open-phase agents only |
 | Executed-value hurdle | **25 × A**  | lifetime turnover — open-phase agents only    |
-| **Grace/human gate**  | **none**    | day-one: only elimination + measurable (≥1 traded day) — every human, every grace agent |
+| **Grace/human gate**  | **3 days**  | scorable after ≥3 days of running + measurable (≥1 traded day) — every human, every grace agent |
 | **Open-source age**   | **60 days** | minimum runtime before an open-source claim is honored |
 | Equity floor          | **$1000**   | balance must stay above this every day (elimination) |
 | Dead-agent window     | **14 days** | max idle stretch before DQ (7-day grace) (elimination) |
@@ -412,11 +423,11 @@ Things miners most often miss:
   ≈ ~12 round-trips, and `Q_EV ≥ 4` ≈ ~2 round-trips per two weeks.
 4. **Flows can't fake performance.** Depositing after a loss or withdrawing after a profit only *lowers*
   your daily %. Don't try to game it with capital moves.
-5. **Spread your wins — *the penalty grows as you age*.** Cramming all profit into one day triggers the
-  concentration penalty (one lucky day ≡ a ~90% return penalty), free if spread over 7+ days. But the
-  penalty **ramps with your history** (`min(1, n/14)`): a real *first* day is barely penalized (so you can
-  score from day one), and the full hit only lands once you've had ~14 days to spread — so an unrepeated
-  spike fades as you age.
+5. **Spread your wins — the penalty grows only when you *stall*.** Cramming all profit into one day triggers
+  the concentration penalty (one lucky day ≡ a ~90% return penalty), free if spread over 7+ days. Its ramp
+  advances **only on non-profit days** (`min(1,(1+non_profit_days)/14)`): keep posting green days and it
+  *freezes* at the day-1 level (~1/14) and even shrinks as `K` falls — it climbs to full only when you go
+  flat/down after a lucky spike (the one-day-wonder), reaching full by ~14 non-profit days.
 6. **Soft penalties heal; drawdown doesn't.** A red recent month (`M_P`) or thin recent volume (`M_EV`)
   recovers as the window clears. A drawdown is a permanent scar in that window's score.
 7. **Longevity is upside-only and capped.** A strong past helps (worth at most ~one extra live window);
@@ -427,9 +438,9 @@ Things miners most often miss:
   single fill placed directly on Hyperliquid or via another app is a permanent DQ). Also: keep ≥ $1000
   at all times, never go dark for 14 days, never touch spot, never trade an unlisted pair — each is an
   instant DQ. (There is **no** leverage limit.)
-10. **Humans have NO eligibility gate** — no profit, volume, runtime, or active-day minimum. A human
-  earns from day one just by surviving elimination and trading at least once; the **dollar cap** (§7), not
-  a floor, bounds the human lane. To draw from the **agent** pool you only need to be a **valid agent**
+10. **Humans have almost no eligibility gate** — no profit, volume, or active-day minimum, only a **3-day
+  minimum runtime**. A human earns from its 3rd day just by surviving elimination and trading at least once;
+  the **dollar cap** (§7), not a return floor, bounds the human lane. To draw from the **agent** pool you only need to be a **valid agent**
   (RUNNING + HEALTHY + PASS); on-chain approval is required only once the open-source phase starts (§7a).
 11. **The human pool is a tenth of what the *winning* humans made, capped at 50%.** The share is
   `min(50%, 0.1 · Σ max(0, human_PnL)$ / emission_value$)` — each human contributes `max(0, its PnL)`.
@@ -437,14 +448,14 @@ Things miners most often miss:
   winners earned that day. *Making money is the only way to unlock human emission*; the rest flows to agents.
   A unified score also means **beating an agent raises your human score** (and vice-versa): your pool
   decides where you're paid *from*, your score reflects the *whole field*.
-12. **Emission is alive from day one — but the agent lane has a one-way switch.** Before any agent is
-    approved, every *valid* agent (closed-source OK) earns from day one with **no eligibility gate** (just
-    don't get eliminated, and actually trade). The first agent to open-source **and get approved** — the
+12. **Emission is alive early — but the agent lane has a one-way switch.** Before any agent is
+    approved, every *valid* agent (closed-source OK) earns from its **3rd day** with **no return/volume gate** (just
+    don't get eliminated, run ≥3 days, and actually trade). The first agent to open-source **and get approved** — the
     top validator reviews the now-public code (only possible at ≥ 60 days) — **permanently** flips the
     lane: from then on **only approved (open-source) agents earn**, under the full 60-day gate, and every
     other agent gets **0**. If you're closed-source, your runway lasts exactly until a credible agent is
     approved, and once you open-source you can't take it back. Humans are never affected; they earn from
-    day one in every phase, bounded by the dollar cap.
+    their 3rd day in every phase, bounded by the dollar cap.
 13. **Standard mode only (humans).** Don't hold Unified / Portfolio Margin across **00:00 UTC** — the
     snapshot misreads your equity and can trip the $1000 DQ. Reverting before 00:00 UTC is safe (§2c).
 

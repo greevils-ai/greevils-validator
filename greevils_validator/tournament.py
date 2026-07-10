@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 
 from .config import HUMAN_PNL_K, HUMAN_SHARE_CAP, PNL_WINDOW_DAYS
 from .scoring import (
+    MIN_RUNTIME_DAYS,
     REQUIRED_RUNTIME_DAYS,
     DailyRecord,
     check_eligibility,
@@ -189,7 +190,8 @@ def is_in_tournament(
 
     grace = (not is_agent) or (not ever_open_sourced)
     if grace:
-        # No eligibility thresholds, only "measurable": >= 1 traded day to score.
+        if m.runtime_days < MIN_RUNTIME_DAYS:
+            return False, [f"not yet scorable (running {m.runtime_days:.0f}d < required {MIN_RUNTIME_DAYS}d)"]
         if len(records) < 2 or m.active_days < 1:
             return False, ["not yet measurable (need >= 1 traded day)"]
         return True, []
