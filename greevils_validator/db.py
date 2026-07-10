@@ -107,6 +107,10 @@ def record_live_day(conn, address: str, day: dt.date, now: dt.datetime | None = 
     if abs((now - boundary).total_seconds()) > _LIVE_BOUNDARY_TOLERANCE:
         return False  # off-boundary: defer to backfill (correctly dated / no phantom row)
 
+    prev = _prev_row(conn, address, day)
+    if prev is None:
+        return False
+
     ch = _clearinghouse(address)
     ms = ch.get("marginSummary")
     if not ms:
@@ -125,10 +129,9 @@ def record_live_day(conn, address: str, day: dt.date, now: dt.datetime | None = 
     fees = sum(float(f.get("fee", 0)) for f in day_fills)
     funding = sum(float(u.get("delta", {}).get("usdc", 0)) for u in fund)
 
-    prev = _prev_row(conn, address, day)
-    if prev is None or prev[3] == "backfill":
-        # No trustworthy residual: no prior row, OR the prior row's unreal is from candle marks (a
-        # different source than this clearinghouse unreal, so the delta would be corrupt). Baseline.
+    if prev[3] == "backfill":
+        # The prior row's unreal is from candle marks (a different source than this clearinghouse
+        # unreal, so the residual delta would be corrupt) -- baseline this one backfill->live day.
         net_flow = 0.0
     else:
         _, prev_eq, prev_unreal, _ = prev
