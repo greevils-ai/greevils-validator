@@ -66,7 +66,7 @@ ALLOWED_PAIRS: set[str] = {
 RETURN_HURDLE = 0.015             # 1.5% return-on-average-capital PnL hurdle
 REQUIRED_RUNTIME_DAYS = 60
 REQUIRED_ACTIVE_DAYS = 40
-MIN_RUNTIME_DAYS = 3
+MIN_RUNTIME_DAYS = 30
 
 # Utility constants (spec)
 BETA = 0.08        # weight on the absolute-PnL reward term BETA*ln(1+X/S). Anchored so

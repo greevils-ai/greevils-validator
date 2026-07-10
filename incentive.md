@@ -82,16 +82,16 @@ instant disqualification.
 > round-trip of your whole book = **2× capital** of executed value. So "25× capital" lifetime ≈
 > **12–13 round-trips** of your book. Keep this in mind for the activity bars.
 
-> **GRACE: almost no eligibility gate — you can earn after just 3 days.** The lifetime minimums above apply
+> **GRACE: no return/turnover gate — but a 30-day minimum runtime.** The lifetime minimums above apply
 > **only to open-source agents in the open-source phase** (§7a). For **every human** and for **agents during
 > the grace period** (before any agent has open-sourced), there is **no return / active-day / executed-value
-> gate** — only a **3-day minimum runtime**. You just have to:
+> gate** — only a **30-day minimum runtime**. You just have to:
 >   1. **survive elimination** (§2b — trade only through the builder app, keep ≥ $1000, don't go dark 14 days, no spot, no unlisted pairs),
->   2. **run for ≥ 3 days** — you're first scored on your **3rd day** (`runtime` counts from your first recorded day, which for a new deposit is the day *before* your first trade), and
+>   2. **run for ≥ 30 days** — you're first scored on your **30th day** (`runtime` counts from your first recorded day, which for a new deposit is the day *before* your first trade), and
 >   3. **be measurable** — have actually traded (≥ 1 active day, so there's a return to score).
 >
 > Once an agent open-sources, *agents* face the full 60-day gate above; **humans never do** — they stay
-> lightly-gated (3-day + measurable), bounded instead by the dollar cap (§7).
+> gated only on runtime (30-day + measurable), bounded instead by the dollar cap (§7).
 
 ### 2b. Elimination (instant DQ — even one violation)
 
@@ -309,21 +309,21 @@ all-ineligible field, a missing price feed (human cap → 0), or a pool with no 
 
 ### 7a. The agent lane: grace → open-source
 
-The agent lane is **alive early** (scoring starts on your 3rd day, §2a) and has two phases. The switch is **approval**: an agent
+The agent lane is **alive** (though scoring starts only on your 30th day, §2a) and has two phases. The switch is **approval**: an agent
 open-sources its code (only possible at ≥ 60 days), the **highest-staked validator manually reviews that
 now-public code** — is it legit, not exploit-like? — and, if so, **approves** it on-chain. You can't
 review closed code, so there is **no approval before open-sourcing**.
 
 | Phase | When | Who earns the agent pool |
 |---|---|---|
-| **Grace** | *Before any agent is approved* | **Any valid agent** (`RUNNING + HEALTHY + PASS`, closed-source OK) that survives elimination, has run **≥ 3 days**, and is measurable — **no return/volume gate** (§2a). Emission flows from its 3rd day; scoring handles quality. |
+| **Grace** | *Before any agent is approved* | **Any valid agent** (`RUNNING + HEALTHY + PASS`, closed-source OK) that survives elimination, has run **≥ 30 days**, and is measurable — **no return/volume gate** (§2a). Emission flows from its 30th day; scoring handles quality. |
 | **Open-source** | The moment the top validator **approves** an open-sourced agent (latches permanently) | **Only approved (open-sourced + reviewed) agents.** Every other agent earns **0**; the approved agents face the full 60-day eligibility gate. |
 
 - **Approval requires open-sourcing**, which is only possible at **≥ 60 days** of runtime — a younger agent can't be approved and does **not** latch the lane.
 - The switch is a **one-way latch**: once the first agent is approved, the lane stays in the open-source phase even if that agent later leaves. Open-source *only when you're ready to commit* — the first approval flips the whole lane for everyone.
-- **Humans are unaffected by these phases** — they always earn from their 3rd day with no return/volume gate, capped as above.
+- **Humans are unaffected by these phases** — they always earn from their 30th day with no return/volume gate, capped as above.
 
-> **Strategic read:** while no agent is approved, a strong *closed-source* agent can earn the lane from its 3rd day. But the first **approved** open-source agent **shuts every other agent out** (closed-source *and* not-yet-approved). If you're closed-source, your edge lasts exactly until a credible agent open-sources and gets approved.
+> **Strategic read:** while no agent is approved, a strong *closed-source* agent can earn the lane from its 30th day. But the first **approved** open-source agent **shuts every other agent out** (closed-source *and* not-yet-approved). If you're closed-source, your edge lasts exactly until a credible agent open-sources and gets approved.
 
 > **Why a dollar cap instead of a fixed cut?** Humans are a benchmark/bootstrap class, not the product.
 > A fixed % pays them whether or not they produced value. The cap pays them **only in proportion to the
@@ -369,7 +369,7 @@ review closed code, so there is **no approval before open-sourcing**.
 | Required active days  | **40 days** | minimum days with a fill — open-phase agents only |
 | Return hurdle         | **1.5%**    | minimum sum-of-daily-%s — open-phase agents only |
 | Executed-value hurdle | **25 × A**  | lifetime turnover — open-phase agents only    |
-| **Grace/human gate**  | **3 days**  | scorable after ≥3 days of running + measurable (≥1 traded day) — every human, every grace agent |
+| **Grace/human gate**  | **30 days** | scorable after ≥30 days of running + measurable (≥1 traded day) — every human, every grace agent |
 | **Open-source age**   | **60 days** | minimum runtime before an open-source claim is honored |
 | Equity floor          | **$1000**   | balance must stay above this every day (elimination) |
 | Dead-agent window     | **14 days** | max idle stretch before DQ (7-day grace) (elimination) |
@@ -438,8 +438,8 @@ Things miners most often miss:
   single fill placed directly on Hyperliquid or via another app is a permanent DQ). Also: keep ≥ $1000
   at all times, never go dark for 14 days, never touch spot, never trade an unlisted pair — each is an
   instant DQ. (There is **no** leverage limit.)
-10. **Humans have almost no eligibility gate** — no profit, volume, or active-day minimum, only a **3-day
-  minimum runtime**. A human earns from its 3rd day just by surviving elimination and trading at least once;
+10. **Humans have no return/volume gate** — no profit, volume, or active-day minimum, only a **30-day
+  minimum runtime**. A human earns from its 30th day just by surviving elimination and trading at least once;
   the **dollar cap** (§7), not a return floor, bounds the human lane. To draw from the **agent** pool you only need to be a **valid agent**
   (RUNNING + HEALTHY + PASS); on-chain approval is required only once the open-source phase starts (§7a).
 11. **The human pool is a tenth of what the *winning* humans made, capped at 50%.** The share is
@@ -449,13 +449,13 @@ Things miners most often miss:
   A unified score also means **beating an agent raises your human score** (and vice-versa): your pool
   decides where you're paid *from*, your score reflects the *whole field*.
 12. **Emission is alive early — but the agent lane has a one-way switch.** Before any agent is
-    approved, every *valid* agent (closed-source OK) earns from its **3rd day** with **no return/volume gate** (just
-    don't get eliminated, run ≥3 days, and actually trade). The first agent to open-source **and get approved** — the
+    approved, every *valid* agent (closed-source OK) earns from its **30th day** with **no return/volume gate** (just
+    don't get eliminated, run ≥30 days, and actually trade). The first agent to open-source **and get approved** — the
     top validator reviews the now-public code (only possible at ≥ 60 days) — **permanently** flips the
     lane: from then on **only approved (open-source) agents earn**, under the full 60-day gate, and every
     other agent gets **0**. If you're closed-source, your runway lasts exactly until a credible agent is
     approved, and once you open-source you can't take it back. Humans are never affected; they earn from
-    their 3rd day in every phase, bounded by the dollar cap.
+    their 30th day in every phase, bounded by the dollar cap.
 13. **Standard mode only (humans).** Don't hold Unified / Portfolio Margin across **00:00 UTC** — the
     snapshot misreads your equity and can trip the $1000 DQ. Reverting before 00:00 UTC is safe (§2c).
 
