@@ -150,6 +150,28 @@ def _perp_series(portfolio: list) -> tuple[list[tuple[int, float]], list[tuple[i
     return av, pnl
 
 
+def perp_day_pnl(address: str, day: dt.date) -> float | None:
+    """The PERP trading PnL booked on ``day`` (UTC), from HL's own portfolio pnlHistory:
+    cumPnL(day close) - cumPnL(prev close). This is the SAME AV/PnL-residual basis backfill uses
+    (net_flow = ΔAV - Δpnl), so it needs NO unrealized-PnL delta -- which is exactly why it is the
+    right source for a backfill->live transition day, where the prior row's stored unreal is
+    unreliable (vestigial 0 / candle mark) and the fills+unreal residual would misread a real
+    deposit/withdraw as PnL. Returns None if the portfolio series doesn't cover ``day`` (the caller
+    then falls back to a flow-neutral baseline)."""
+    _, pnl = _perp_series(_portfolio(address))
+    if not pnl:
+        return None
+    ts = [s[0] for s in pnl]
+    vs = [s[1] for s in pnl]
+    close = int(dt.datetime(day.year, day.month, day.day, tzinfo=dt.timezone.utc).timestamp() * 1000) + _DAY_MS
+    i_close = bisect.bisect_right(ts, close)
+    if i_close == 0:                              # day precedes the account's first PnL point
+        return None
+    i_prev = bisect.bisect_right(ts, close - _DAY_MS)
+    cum_prev = vs[i_prev - 1] if i_prev > 0 else 0.0  # cumPnL starts at 0 before the series
+    return vs[i_close - 1] - cum_prev
+
+
 def build_miner_data(address: str, account_type: str) -> tuple[MinerData, dict[dt.date, float]]:
     """Per-account perp-only daily series for BACKFILL, sourced from HL's own numbers.
 

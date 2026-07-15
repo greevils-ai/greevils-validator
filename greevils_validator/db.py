@@ -24,7 +24,7 @@ import datetime as dt
 import logging
 import sqlite3
 
-from .hl_data import _clearinghouse, _post, build_miner_data
+from .hl_data import _clearinghouse, _post, build_miner_data, perp_day_pnl
 from .scoring import DailyRecord
 from .tournament import MinerData
 
@@ -130,9 +130,13 @@ def record_live_day(conn, address: str, day: dt.date, now: dt.datetime | None = 
     funding = sum(float(u.get("delta", {}).get("usdc", 0)) for u in fund)
 
     if prev[3] == "backfill":
-        # The prior row's unreal is from candle marks (a different source than this clearinghouse
-        # unreal, so the residual delta would be corrupt) -- baseline this one backfill->live day.
-        net_flow = 0.0
+        # The prior row is a backfill row whose stored unreal is unreliable (vestigial 0 / candle
+        # mark), so the fills+unreal residual below would misread a real deposit/withdraw on this
+        # transition day as trading PnL (zeroing net_flow, the old behaviour, DROPPED such flows).
+        # Take the day's PnL from the portfolio delta instead (same ΔAV-Δpnl basis backfill uses,
+        # no unreal): net_flow = ΔAV - day_pnl. None (series doesn't cover the day) -> flat baseline.
+        day_pnl = perp_day_pnl(address, day)
+        net_flow = 0.0 if day_pnl is None else (equity - prev[1]) - day_pnl
     else:
         _, prev_eq, prev_unreal, _ = prev
         trading_pnl = realized - fees + funding + (unreal - prev_unreal)
