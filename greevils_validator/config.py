@@ -65,6 +65,23 @@ try:
 except ValueError:
     BUILDER_EXCLUSIVITY_START = None  # ignore a malformed date rather than crash at import
 
+# Permanent OPERATOR BAN list
+_BANNED_SEED = {
+    "0x9279251be534c3ecdb385213d902c173d10a3a83",
+    "0x4ae8cd43a4c70a3776f9bf3a3387a95d84945839",
+    "0x1a586544991c9e19b861c169cf7b6cf28c7d2d67",
+    "0x63033c92f2532e9661e27f29cfc7abcc14cd076b",
+    "0x79767182df81e145fc84ddba69d6b268f7d1c874",
+    "0x35a27017951e288e49990e2c61c6e19d90fbf5b7",
+    "0x04da7336b5777b1abaae6d5844da7917c611b94b",
+    "0x9c0e3a75384d8b940059535ce6c1702e529cacbd",
+}
+
+BANNED_ADDRESSES = frozenset(
+    {a.strip().lower() for a in _BANNED_SEED if a.strip()}
+    | {a.strip().lower() for a in os.getenv("GREEVILS_BANNED", "").split(",") if a.strip()}
+)
+
 # An agent submission counts as a *valid greevil agent* only if greevils-api reports all of
 # these for it. Anything else (or an address greevils-api has never seen) is a human account.
 AGENT_REQUIRED_STATUS = "RUNNING"

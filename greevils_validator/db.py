@@ -24,6 +24,7 @@ import datetime as dt
 import logging
 import sqlite3
 
+from .config import BANNED_ADDRESSES
 from .hl_data import _clearinghouse, _post, build_miner_data, perp_day_pnl
 from .scoring import DailyRecord
 from .tournament import MinerData
@@ -80,9 +81,14 @@ def _bump_observations(conn, address: str, coins: set[str]) -> None:
 
 
 def is_disqualified(conn, address: str) -> bool:
-    """True if this account has been permanently eliminated (e.g. traded off our builder app)."""
+    """True if this account has been permanently eliminated -- either OPERATOR-BANNED
+    (config.BANNED_ADDRESSES, hard-coded so the ban survives a DB rebuild) or RECORDED in the
+    disqualified table (e.g. traded off our builder app)."""
+    addr = address.lower()
+    if addr in BANNED_ADDRESSES:
+        return True
     return conn.execute("SELECT 1 FROM disqualified WHERE address=?",
-                        (address.lower(),)).fetchone() is not None
+                        (addr,)).fetchone() is not None
 
 
 def mark_disqualified(conn, address: str, reason: str) -> None:

@@ -40,7 +40,7 @@ import datetime as dt
 import math
 from dataclasses import dataclass, field
 
-from .config import HUMAN_PNL_K, HUMAN_SHARE_CAP, PNL_WINDOW_DAYS
+from .config import BANNED_ADDRESSES, HUMAN_PNL_K, HUMAN_SHARE_CAP, PNL_WINDOW_DAYS
 from .scoring import (
     MIN_RUNTIME_DAYS,
     REQUIRED_RUNTIME_DAYS,
@@ -178,6 +178,8 @@ def is_in_tournament(
     gate, just survive elimination and be MEASURABLE (>= 1 traded day). OPEN (agents once
     the latch is set): the full eligibility gate, and only agents whose open-source claim
     is honored (open_sourced AND >= 60d) earn -- closed-source or under-age agents drop."""
+    if miner.address.lower() in BANNED_ADDRESSES:
+        return False, ["operator-banned account"]
     records = [r for r in miner.records if r.date <= end_date]  # no future leakage
     if not records:
         return False, ["no data"]
