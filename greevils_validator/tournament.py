@@ -21,13 +21,13 @@ From unified scores to weights:
         agent_share = 1 - human_share
     What humans don't take goes to agents (or burns if none).
 
-Agent-lane open-source phases (emission is alive from day one):
-  * GRACE -- before any agent open-sources. Closed-source agents earn with NO eligibility
-    gate (just survive elimination + be measurable); the concentration penalty K stops a
-    one-lucky-day account running away.
-  * OPEN -- once any agent open-sources (honored only at >= 60d runtime), the lane LATCHES:
-    only open-source agents earn, under the full 60d eligibility.
-  * Humans are never eligibility-gated (measurable + not eliminated, bounded by the cap).
+Agent lane -- open-source only:
+  * An agent earns ONLY once it is OPEN-SOURCED **and** APPROVED (the top validator's gva1
+    review) **and** >= 60 days old, and then only if it clears the full eligibility gate
+    (runtime / active days / return hurdle / executed value). This is unconditional: there
+    is no grace phase and no latch -- a closed-source, unapproved, or under-age agent earns 0.
+  * Humans are never eligibility-gated (measurable + not eliminated, bounded by the cap) --
+    they cannot open-source, so the agent requirements would lock them out permanently.
 
 Longevity bonus (locked design parameters KAPPA=0.5, H=90): each pre-overlap day d (<= the
 overlap start t) weights its daily % (R) and daily $ (X) by w(d) = 2^(-(t - d)/H), fading
@@ -42,7 +42,6 @@ from dataclasses import dataclass, field
 
 from .config import BANNED_ADDRESSES, HUMAN_PNL_K, HUMAN_SHARE_CAP, PNL_WINDOW_DAYS
 from .scoring import (
-    MIN_RUNTIME_DAYS,
     REQUIRED_RUNTIME_DAYS,
     DailyRecord,
     check_eligibility,
@@ -59,8 +58,6 @@ KAPPA = 0.5        # bonus weight
 
 # Overlap window floor
 OVERLAP_FLOOR_DAYS = 30
-
-MATURITY_DAYS = 14
 
 
 @dataclass
@@ -158,9 +155,7 @@ def matchup_score(
     bonus_R, bonus_X = longevity_bonus(series[0], series[1], overlap_start, kappa, H)
     util = compute_utility(m.R + bonus_R, m.X + bonus_X, m.D, m.V, m.K, m.conc_ramp_days)
     pun = compute_punishment(m.rolling_30d_pnl, m.Q_EV)
-    full_runtime = (end_date - miner.start).days if miner.start else 0
-    maturity = min(1.0, full_runtime / MATURITY_DAYS) if MATURITY_DAYS > 0 else 1.0
-    s = util.performance_score_G * pun.M_total * maturity
+    s = util.performance_score_G * pun.M_total
     return s if math.isfinite(s) and s > 0.0 else 0.0
 
 
@@ -174,10 +169,16 @@ def is_in_tournament(
     """Lifetime gate: a miner enters iff NOT eliminated AND eligible, both judged on the
     full history up to end_date (not the overlap). Returns (ok, reasons).
 
-    GRACE (humans always; agents while ``ever_open_sourced`` is unset): no eligibility
-    gate, just survive elimination and be MEASURABLE (>= 1 traded day). OPEN (agents once
-    the latch is set): the full eligibility gate, and only agents whose open-source claim
-    is honored (open_sourced AND >= 60d) earn -- closed-source or under-age agents drop."""
+    AGENTS face the FULL gate at all times -- there is NO grace period. An agent earns only
+    once it is OPEN-SOURCED AND APPROVED (``open_sourced``, set from the top validator's gva1
+    review in evaluation.py) AND has >= REQUIRED_RUNTIME_DAYS of runtime, and then only if it
+    clears the full eligibility gate (runtime / active days / return hurdle / executed value).
+    ``ever_open_sourced`` is accepted for signature compatibility but no longer gates anything:
+    the requirement is unconditional, not latched.
+
+    HUMANS are never eligibility-gated -- they cannot open-source, so the agent requirements
+    would lock them out permanently. A human enters by surviving elimination and being
+    MEASURABLE (>= 1 traded day); the human lane is bounded by the dollar cap instead (§7)."""
     if miner.address.lower() in BANNED_ADDRESSES:
         return False, ["operator-banned account"]
     records = [r for r in miner.records if r.date <= end_date]  # no future leakage
@@ -187,21 +188,20 @@ def is_in_tournament(
     if elim.eliminated:
         return False, elim.reasons
     m = compute_metrics(records, end_date, miner.gap_dates)
-    is_agent = miner.account_type != "human"
 
-    if is_agent and ever_open_sourced and not (
-        miner.open_sourced and m.runtime_days >= REQUIRED_RUNTIME_DAYS
-    ):
-        return False, ["closed-source agent in the open-source phase"]
-
-    grace = (not is_agent) or (not ever_open_sourced)
-    if grace:
-        if m.runtime_days < MIN_RUNTIME_DAYS:
-            return False, [f"not yet scorable (running {m.runtime_days:.0f}d < required {MIN_RUNTIME_DAYS}d)"]
+    if miner.account_type == "human":
         if len(records) < 2 or m.active_days < 1:
             return False, ["not yet measurable (need >= 1 traded day)"]
         return True, []
 
+    # Agent: open-sourced + approved, and old enough for that claim to be honored.
+    if not miner.open_sourced:
+        return False, ["agent is not open-sourced and approved"]
+    if m.runtime_days < REQUIRED_RUNTIME_DAYS:
+        return False, [
+            f"agent runtime {m.runtime_days:.0f}d < required {REQUIRED_RUNTIME_DAYS}d "
+            f"(open-source claim not yet honored)"
+        ]
     failures = check_eligibility(miner.account_type, m)
     return (not failures), failures
 

@@ -82,19 +82,20 @@ instant disqualification.
 > round-trip of your whole book = **2× capital** of executed value. So "25× capital" lifetime ≈
 > **12–13 round-trips** of your book. Keep this in mind for the activity bars.
 
-> **GRACE: earn once you've run ≥ 4 full UTC days — and young accounts are still discounted.** The lifetime minimums above apply
-> **only to open-source agents in the open-source phase** (§7a). For **every human** and for **agents during
-> the grace period** (before any agent has open-sourced), there is **no return / active-day / executed-value
-> gate**. You just have to:
->   1. **survive elimination** (§2b — trade only through the builder app, keep ≥ $1000, don't go dark 14 days, no spot, no unlisted pairs), and
->   2. **be scorable & measurable** — have run **≥ 4 full UTC days** and actually traded (≥ 1 active day, so there's a return to score).
+> **AGENTS: open-source + approved + 60 days, always. There is no grace period.** The lifetime
+> minimums above apply to **every agent, at all times** (§7a). An agent earns **only** once all
+> three hold — it is **open-sourced**, **approved** by the top validator on-chain (gva1), and
+> **≥ 60 days old** — and then only if it clears every threshold above (60d runtime, 40 active
+> days, the 1.5% return hurdle, the executed-value hurdle). A closed-source, unapproved, or
+> under-age agent earns **0**. Being a *valid* agent (`RUNNING + HEALTHY + PASS`) only makes you
+> an agent; it does **not** make you eligible.
 >
-> You become scorable only after **≥ 4 full UTC days** (e.g. a first deposit on 7/8 → first scored at the
-> **7/12 00:00 UTC** boundary, when its 4th day seals). Even then your matchup score is scaled by a **maturity
-> ramp** (§5): still discounted while young (~**4/14** at first eligibility) and reaching **full weight only by
-> ~14 days** — so a barely-eligible account can't win a round on a lucky score. Once an agent open-sources,
-> *agents* face the full 60-day gate above;
-> **humans never do** — they stay bounded instead by the dollar cap (§7).
+> **HUMANS are never eligibility-gated** — they cannot open-source, so these requirements would
+> lock them out permanently. A human just has to:
+>   1. **survive elimination** (§2b — trade only through the builder app, keep ≥ $1000, don't go dark 14 days, no spot, no unlisted pairs), and
+>   2. **be measurable** — actually have traded (≥ 1 active day, so there's a return to score).
+>
+> The human lane is bounded by the **dollar cap** (§7) rather than by a return or age floor.
 
 ### 2b. Elimination (instant DQ — even one violation)
 
@@ -237,20 +238,12 @@ counts both sides.
 ### Your matchup score
 
 ```
-score = G * M * maturity
-        maturity = min(1, runtime_days / 14)      # young-account discount (see below)
+score = G * M
 ```
 
-### Maturity ramp (young-account discount)
-
-A barely-eligible miner (just past the **4-day** scorability gate, §2a) shouldn't win a round on a single lucky
-score. So your matchup score is scaled by **`maturity = min(1, runtime_days / 14)`** — where `runtime_days` is
-your account's **age** (from your first recorded day, *not* the overlap). Since scoring only starts at **day 4**,
-it runs from ~**4/14 at first eligibility** **linearly to full by ~14 days**, and has no effect after that. This
-is a **confidence discount on youth**, deliberately *separate* from the concentration penalty (which is about
-profit *spread*, not age): a fresh account can enter and earn once it clears the 4-day gate, but its score is
-capped until it's proven itself over ~2 weeks. *(Example: a 4-day account with a score twice a rival's can still
-lose, because ×4/14 knocks it below a 10-day rival at ×10/14.)*
+There is **no age discount**. Agents must already be ≥ 60 days old to earn at all (§2a), so a
+youth multiplier would be redundant; the **concentration penalty** (§4) is what stops a
+one-lucky-day account running away, and it keys on profit *spread*, not age.
 
 > **Penalties recover; scars don't.** `M_P` and `M_EV` are snapshots of your *recent* window — a red
 > month or a quiet stretch heals as soon as the window clears (one good day can flip them back).
@@ -308,8 +301,8 @@ your_weight = pool_share · Score(you) / Σ Score(your pool)
 - You're an **agent** if greevils-api reports your account **RUNNING + HEALTHY + PASS** (a *valid*
 agent); everything else is a **human**. Your type only sets **which pool** you draw from — you still
 compete in the *same* tournament, so your score already reflects how you did against the other type.
-**On-chain approval is *not* required to be an agent or to earn in the grace phase** — it only gates the
-open-source phase (§7a).
+**On-chain approval is *not* required to be classified an agent — but it IS required for an agent to
+earn anything at all** (§7a).
 - **The human pool is dollar-capped.** The human emission, valued in USD, is at most `**k = 0.1`× the
 dollars the human lane made that day** — i.e. humans are paid emission worth up to a tenth of what they
 earned — and **never more than 50%** of the round. The bound does **not** depend on how many agents run.
@@ -322,23 +315,29 @@ eligible agents*, in which case it **burns**.
 - **Burn:** anything unawarded burns to the burn UID — a human shortfall with no agents to absorb it, an
 all-ineligible field, a missing price feed (human cap → 0), or a pool with no clear winner.
 
-### 7a. The agent lane: grace → open-source
+### 7a. The agent lane: open-source only
 
-The agent lane is **alive from day one** (young accounts are discounted by the maturity ramp, §5) and has two phases. The switch is **approval**: an agent
-open-sources its code (only possible at ≥ 60 days), the **highest-staked validator manually reviews that
-now-public code** — is it legit, not exploit-like? — and, if so, **approves** it on-chain. You can't
-review closed code, so there is **no approval before open-sourcing**.
+**There is no grace period.** An agent earns the agent pool only when **all three** hold, at all times:
 
-| Phase | When | Who earns the agent pool |
+| # | Requirement | Detail |
 |---|---|---|
-| **Grace** | *Before any agent is approved* | **Any valid agent** (`RUNNING + HEALTHY + PASS`, closed-source OK) that survives elimination and is measurable — **no return/volume gate** (§2a). Emission flows once an account clears the **4-day** scorability gate (§2a), then discounted while young by the maturity ramp (§5); scoring handles quality. |
-| **Open-source** | The moment the top validator **approves** an open-sourced agent (latches permanently) | **Only approved (open-sourced + reviewed) agents.** Every other agent earns **0**; the approved agents face the full 60-day eligibility gate. |
+| 1 | **Open-sourced** | your code is public — you can't be reviewed otherwise |
+| 2 | **Approved** | the **highest-staked validator manually reviews that now-public code** — is it legit, not exploit-like? — and approves it on-chain (gva1) |
+| 3 | **≥ 60 days runtime** | plus the full eligibility gate: 40 active days, the 1.5% return hurdle, the 25×A executed-value hurdle (§2a) |
 
-- **Approval requires open-sourcing**, which is only possible at **≥ 60 days** of runtime — a younger agent can't be approved and does **not** latch the lane.
-- The switch is a **one-way latch**: once the first agent is approved, the lane stays in the open-source phase even if that agent later leaves. Open-source *only when you're ready to commit* — the first approval flips the whole lane for everyone.
-- **Humans are unaffected by these phases** — they always earn once past the 4-day scorability gate (discounted while young, §5) with no return/volume gate, capped as above.
+Anything short of all three earns **0** — a closed-source agent, an approved-but-under-age agent, or a
+valid-but-unapproved agent alike. Being a *valid* agent (`RUNNING + HEALTHY + PASS`) only decides that
+you're classified an **agent** rather than a human; it grants **no** eligibility.
 
-> **Strategic read:** while no agent is approved, a strong *closed-source* agent can earn the lane as soon as it's scorable (≥ 4 days, discounted until it matures, §5). But the first **approved** open-source agent **shuts every other agent out** (closed-source *and* not-yet-approved). If you're closed-source, your edge lasts exactly until a credible agent open-sources and gets approved.
+- **Approval requires open-sourcing**, and open-sourcing is only honored at **≥ 60 days** of runtime.
+- **Humans are unaffected** — they can't open-source, so none of this applies to them. They earn by
+surviving elimination and being measurable, bounded by the dollar cap (§7).
+- If **no agent qualifies**, the agent pool has no eligible members and that share **burns** (§7).
+
+> **Strategic read:** there is no early-earning window for agents any more. Until you are open-sourced,
+> approved, and 60 days old, you earn nothing — so the only path into the agent pool is to commit your
+> code publicly and clear a genuine track record. Expect the agent pool to burn until the first agent
+> qualifies.
 
 > **Why a dollar cap instead of a fixed cut?** Humans are a benchmark/bootstrap class, not the product.
 > A fixed % pays them whether or not they produced value. The cap pays them **only in proportion to the
@@ -373,7 +372,6 @@ review closed code, so there is **no approval before open-sourcing**.
 | `H`    | longevity half-life     | **90 days** | track record halves in weight every 90 days          |
 | return-denom floor | profit-day % divisor floor | **$10,000** | profit-day return divides by ≥ this (§3); loss days use real balance |
 | overlap floor | min comparison window | **30 days** | pair window floored to ≥30d; young accounts on full history (§1) |
-| maturity ramp | young-account discount days | **14 days** | matchup score ×`min(1, runtime_days/14)` — from ~4/14 at first eligibility (day 4) to full by day 14 (§5) |
 
 
 ### 8b. Gate & haircut constants
@@ -381,11 +379,11 @@ review closed code, so there is **no approval before open-sourcing**.
 
 | Name                  | Default     | Meaning                                       |
 | --------------------- | ----------- | --------------------------------------------- |
-| Required runtime      | **60 days** | minimum history — **open-phase agents only**  |
-| Required active days  | **40 days** | minimum days with a fill — open-phase agents only |
-| Return hurdle         | **1.5%**    | minimum sum-of-daily-%s — open-phase agents only |
-| Executed-value hurdle | **25 × A**  | lifetime turnover — open-phase agents only    |
-| **Grace/human gate**  | **4 full UTC days** | scorable after **≥ 4 full UTC days** of runtime (+ measurable, ≥1 traded day); young accounts still discounted by the maturity ramp — every human, every grace agent |
+| Required runtime      | **60 days** | minimum history — **every agent, always**     |
+| Required active days  | **40 days** | minimum days with a fill — every agent, always |
+| Return hurdle         | **1.5%**    | minimum sum-of-daily-%s — every agent, always  |
+| Executed-value hurdle | **25 × A**  | lifetime turnover — every agent, always       |
+| **Human gate**        | *(none)*    | humans are never eligibility-gated — just survive elimination + be measurable (≥1 traded day); bounded by the dollar cap |
 | **Open-source age**   | **60 days** | minimum runtime before an open-source claim is honored |
 | Equity floor          | **$1000**   | balance must stay above this every day (elimination) |
 | Dead-agent window     | **14 days** | max idle stretch before DQ (7-day grace) (elimination) |
@@ -455,24 +453,25 @@ Things miners most often miss:
   at all times, never go dark for 14 days, never touch spot, never trade an unlisted pair — each is an
   instant DQ. (There is **no** leverage limit.)
 10. **Humans have no return/volume gate** — no profit, volume, runtime, or active-day minimum beyond being
-  measurable. A human earns once it has **≥ 4 full UTC days** of runtime, has traded at least once, and survives elimination (its score
-  discounted while young by the maturity ramp, §5); the **dollar cap** (§7), not a return floor, bounds the
-  human lane. To draw from the **agent** pool you only need to be a **valid agent**
-  (RUNNING + HEALTHY + PASS); on-chain approval is required only once the open-source phase starts (§7a).
+  measurable. A human earns just by surviving elimination and trading at least once; the **dollar cap**
+  (§7), not a return floor, bounds the human lane. Drawing from the **agent** pool is far stricter:
+  being a valid agent (RUNNING + HEALTHY + PASS) is not enough — you must be open-sourced, approved,
+  and ≥ 60 days old (§7a).
 11. **The human pool is a tenth of what the *winning* humans made, capped at 50%.** The share is
   `min(50%, 0.1 · Σ max(0, human_PnL)$ / emission_value$)` — each human contributes `max(0, its PnL)`.
   No winners → nothing; otherwise humans are paid emission worth at most a *tenth* of the dollars the
   winners earned that day. *Making money is the only way to unlock human emission*; the rest flows to agents.
   A unified score also means **beating an agent raises your human score** (and vice-versa): your pool
   decides where you're paid *from*, your score reflects the *whole field*.
-12. **Emission is alive early — but the agent lane has a one-way switch.** Before any agent is
-    approved, every *valid* agent (closed-source OK) earns once it's scorable (**≥ 4 full UTC days**) with **no return/volume gate** (just
-    don't get eliminated and actually trade — its score discounted while young, §5). The first agent to open-source **and get approved** — the
-    top validator reviews the now-public code (only possible at ≥ 60 days) — **permanently** flips the
-    lane: from then on **only approved (open-source) agents earn**, under the full 60-day gate, and every
-    other agent gets **0**. If you're closed-source, your runway lasts exactly until a credible agent is
-    approved, and once you open-source you can't take it back. Humans are never affected; they earn in
-    every phase once scorable (≥ 4 days) (discounted while young, §5), bounded by the dollar cap.
+12. **Agents earn nothing until open-sourced, approved, and 60 days old.** There is **no grace
+    period** and no early-earning window. All three must hold at once — public code, an on-chain
+    approval from the top validator reviewing that code, and ≥ 60 days of runtime — and then you
+    still face the full eligibility gate (40 active days, 1.5% return, 25×A turnover). A
+    closed-source, unapproved, or under-age agent earns **0**, no matter how well it trades. Being a
+    *valid* agent (RUNNING + HEALTHY + PASS) only classifies you as an agent; it grants no
+    eligibility. **Expect the agent pool to burn until the first agent qualifies.** Humans are never
+    affected — they can't open-source, so they earn by surviving elimination and trading at least
+    once, bounded by the dollar cap.
 13. **Standard mode only (humans).** Don't hold Unified / Portfolio Margin across **00:00 UTC** — the
     snapshot misreads your equity and can trip the $1000 DQ. Reverting before 00:00 UTC is safe (§2c).
 

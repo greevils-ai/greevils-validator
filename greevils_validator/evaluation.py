@@ -8,10 +8,11 @@ agent pool and a human pool by the same unified score, with the human pool sized
 cap (see tournament.py / config.py). Whatever isn't awarded -- the human shortfall when there
 are no eligible agents to absorb it, an empty field, etc. -- is burned to BURN_UID.
 
-The agent lane is alive from day one. GRACE (no agent approved yet): every *valid* agent
-(greevils-api RUNNING/HEALTHY/PASS) earns -- no eligibility gate, just elimination + measurability.
-OPEN-SOURCE (the top validator has approved >=1 open-sourced agent on-chain, gva1): only approved
-agents earn, under the full eligibility gate. See approvals.py / tournament.py.
+The agent lane is OPEN-SOURCE ONLY, with no grace period: an agent earns only once it is
+open-sourced AND approved by the top validator on-chain (gva1) AND >= 60 days old, and then only
+if it clears the full eligibility gate. Being a *valid* agent (greevils-api RUNNING/HEALTHY/PASS)
+decides agent-vs-human classification, NOT eligibility -- an unapproved agent earns 0. Humans are
+never eligibility-gated, bounded instead by the dollar cap. See approvals.py / tournament.py.
 """
 import logging
 
@@ -59,8 +60,9 @@ def run_evaluation_round(subtensor, metagraph, netuid: int, api_url: str) -> tup
 
     An account is an *agent* iff greevils-api reports it RUNNING/HEALTHY/PASS (a valid agent);
     everything else is a human. APPROVAL (gva1 -- the top validator's review of an *open-sourced*
-    agent) does NOT decide agent-vs-human; it only gates the OPEN-SOURCE phase: before any agent is
-    approved every valid agent earns, and once any is, only approved agents earn (see tournament.py).
+    agent) does NOT decide agent-vs-human; it is the agent's EARNING requirement: only approved,
+    open-sourced agents >= 60 days old earn, at all times. Unapproved agents earn 0 (see
+    tournament.py); humans are ungated and bounded by the dollar cap.
     """
     claims = _builder_exclusive_claims(collect_verified_claims(subtensor, metagraph, netuid))
     valid_agents = fetch_valid_agents(api_url)  # {hl_address: image_digest}
